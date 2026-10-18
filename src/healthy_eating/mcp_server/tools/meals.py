@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import BaseModel, Field
 
 from healthy_eating.db import Database
 from healthy_eating.db.models import Meal
@@ -34,24 +34,33 @@ HealthyEating needs all four values for every meal:
   did not produce and list them in `estimated_fields`.
 - Nothing calculated yet (only a photo or a description): estimate all values yourself
   with source="estimated_by_assistant".
-- If you cannot estimate a value reliably (portion size, ingredients or cooking method
-  such as oil, butter or sauces are unknown), leave it empty and put your questions in
-  `open_questions`.
+- Something is unclear (portion size, drinks, sauces, oil or butter): if you can still give
+  a rough estimate, pass all four values with confidence "low" and put your questions in
+  `open_questions`. The meal is saved now; when the user answers, call again with
+  `replaces_meal_id` if the answer changes the values. Ask about a meal only once: after
+  the user's answer, save your best estimate without new questions.
+- Only if you cannot estimate a value at all, leave it empty and put your questions in
+  `open_questions`; then nothing is saved until the user answers.
 
 Handling the result:
-- status "needs_more_info": nothing was saved. Ask the user the returned questions as a
-  short follow-up after your normal answer (never instead of it), then call again. If the
-  user cannot answer, use your best estimate with confidence "low" and no `open_questions`.
-- After every call, tell the user whether the meal was saved to HealthyEating by repeating
-  `user_message`. If the call fails with an error, tell the user the meal was NOT saved to
-  HealthyEating and show the error.
+- Always give your normal answer first, including any estimate you can make, then the
+  one-line `user_message`, then the questions in `questions_for_user` (if any). Never ask
+  instead of answering.
+- status "logged": the meal was saved. If `questions_for_user` is not empty, ask them after
+  your answer.
+- status "needs_more_info": nothing was saved. Ask the returned questions, then call again.
+  If the user cannot answer, use your best estimate with confidence "low".
+- If the call fails with an error, tell the user the meal was NOT saved to HealthyEating,
+  say why, and call again if the error says how to fix the input.
 
 Also:
 - Several dishes in one meal: save the total for the meal, unless the user tracks each
   dish separately.
 - The user corrects a meal that was already saved: call again with `replaces_meal_id` set
   to the `meal_id` from the earlier result, so the meal is not counted twice.
-- Meals eaten earlier (for example "save what I had for breakfast"): set `eaten_at`.
+- Meals eaten earlier (for example "yesterday's dinner"): set `eaten_at`, with the user's UTC
+  offset if you know it. Never ask the user for their offset or time zone. Leave `eaten_at`
+  empty for meals eaten just now.
 """
 
 FIELD_LABELS: dict[NutrientField, str] = {
@@ -90,13 +99,17 @@ class LogMealResult(BaseModel):
         description="Nutrition values that are still unknown"
     )
     questions_for_user: list[str] = Field(
-        description="Ask the user these questions after your normal answer, then call again"
+        description=(
+            "Ask the user these after your normal answer. With status 'logged' the meal is "
+            "already saved: call again with replaces_meal_id if the answer changes the values. "
+            "With 'needs_more_info' call again with the answers."
+        )
     )
     warnings: list[str] = Field(description="Possible problems with the values")
     meal: SavedMeal | None = Field(description="The saved meal, when status is 'logged'")
 
 
-def _saved_message(meal: MealEstimate) -> str:
+def _saved_message(meal: MealEstimate, *, refinable: bool = False) -> str:
     verb = "Updated in" if meal.replaces_meal_id else "Saved to"
     message = (
         f"{verb} HealthyEating: {meal.dish_name}, {meal.calories_kcal:g} kcal "
@@ -107,7 +120,10 @@ def _saved_message(meal: MealEstimate) -> str:
     if meal.source == "from_conversation" and meal.estimated_fields:
         labels = [FIELD_LABELS[name] for name in meal.estimated_fields]
         message += f"; {', '.join(labels)} estimated by the assistant"
-    return message + "."
+    message += "."
+    if refinable:
+        message += " I'll update it if your answer changes the estimate."
+    return message
 
 
 def _saved_meal(row: Meal) -> SavedMeal:
@@ -196,11 +212,12 @@ def register(mcp: FastMCP, db: Database) -> None:
             Field(ge=0, le=1000, description="Carbohydrates in the whole portion, g"),
         ] = None,
         eaten_at: Annotated[
-            AwareDatetime | None,
+            datetime | None,
             Field(
                 description=(
-                    "When the meal was eaten, ISO 8601 with timezone offset. "
-                    "Leave empty for 'just now'."
+                    "Only for meals eaten earlier: when, as ISO 8601, with the user's UTC offset "
+                    "if known (e.g. '2026-10-18T08:30:00+02:00'); a time without an offset is "
+                    "accepted. Leave empty for 'just now'."
                 )
             ),
         ] = None,
@@ -243,8 +260,9 @@ def register(mcp: FastMCP, db: Database) -> None:
                     f"Not saved to HealthyEating yet: I need a few more details about {dish_name}."
                 ),
                 message=(
-                    "Nothing was saved. Give your normal answer first, unchanged. Then tell the "
-                    "user `user_message`, ask the questions below and call log_meal again."
+                    "Nothing was saved. Give your normal answer first, unchanged and with any "
+                    "estimate you can make. Then tell the user `user_message`, ask the "
+                    "questions below and call log_meal again."
                 ),
                 missing_fields=evaluation.missing_fields,
                 questions_for_user=evaluation.questions_for_user,
@@ -263,16 +281,23 @@ def register(mcp: FastMCP, db: Database) -> None:
                 "found. Save it as a new meal instead."
             ) from None
 
+        questions = evaluation.questions_for_user
+        message = (
+            "The meal was saved. Keep your normal answer, add `user_message` as one line "
+            "and mention any warnings."
+        )
+        if questions:
+            message += (
+                " Then ask `questions_for_user`; if the answer changes the values, call "
+                "log_meal again with replaces_meal_id."
+            )
         return LogMealResult(
             status="logged",
             saved_to_healthy_eating=True,
-            user_message=_saved_message(meal),
-            message=(
-                "The meal was saved. Keep your normal answer, add `user_message` as one line "
-                "and mention any warnings."
-            ),
+            user_message=_saved_message(meal, refinable=bool(questions)),
+            message=message,
             missing_fields=[],
-            questions_for_user=[],
+            questions_for_user=questions,
             warnings=evaluation.warnings,
             meal=saved,
         )

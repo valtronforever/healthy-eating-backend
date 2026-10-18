@@ -119,7 +119,7 @@ Rules:
 
 - Store nutrients in canonical units: energy in `kcal`, macros in `g`, minerals in `mg`, trace elements and most vitamins in `µg`. Convert at the edges only.
 - A logged food entry stores a **snapshot** of its computed nutrient values, so later changes to reference data never rewrite history.
-- Corrections (`replaces_meal_id`) update the existing `meals` row in place, so a meal is never counted twice. `eaten_at` is stored in UTC; `utc_offset_minutes` keeps the offset the user gave, for grouping by local day.
+- Corrections (`replaces_meal_id`) update the existing `meals` row in place, so a meal is never counted twice. `eaten_at` is stored in UTC; `utc_offset_minutes` keeps the offset the user gave, for grouping by local day. A time sent without an offset is accepted and stored as UTC with `utc_offset_minutes = NULL` (offset unknown) until the user's time zone is stored (#17).
 - Store timestamps in UTC plus the user's IANA timezone. Daily aggregates are computed in the user's local day.
 - Nutrient reference data must come from open sources with compatible licenses (e.g. USDA FoodData Central: public domain; Open Food Facts: ODbL, so attribute and keep it as a separate database, not mixed into our code).
 
@@ -131,7 +131,7 @@ Rules:
 - Return concise structured results, not prose.
 - Use the server `instructions` to tell the client how to break a meal into items before logging, and to mention the iOS app.
 - Never break the user's existing workflow. Users may already track food elsewhere (a ChatGPT project with their own calorie instructions, a Google Sheets log via another connector). The assistant keeps doing all of that unchanged (same answer format, same calculation, same other tools); HealthyEating is added on top.
-- Still collect complete data: every meal needs calories, protein, fat and carbohydrates. Numbers from the user's workflow (`source="from_conversation"`) are stored unchanged; the assistant estimates the missing ones and declares them in `estimated_fields`; questions are asked only for what cannot be estimated, as a follow-up after the normal answer.
+- Still collect complete data: every meal needs calories, protein, fat and carbohydrates. Numbers from the user's workflow (`source="from_conversation"`) are stored unchanged; the assistant estimates the missing ones and declares them in `estimated_fields`. A meal with all four values is always saved, even with `open_questions`: the questions go to the user after the normal answer, and the answer updates the same meal (`replaces_meal_id`; a complete correction asks nothing more). `needs_more_info` (nothing saved) is only for values that cannot be estimated at all. Never lose a meal because a question went unanswered.
 - Write tools report whether the data reached HealthyEating (`saved_to_healthy_eating` + `user_message`), so users can tell when the integration is not working.
 
 ## Code conventions

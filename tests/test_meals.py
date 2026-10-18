@@ -1,4 +1,5 @@
 import logging
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -106,9 +107,28 @@ def test_existing_calculation_with_macros_only_derives_calories() -> None:
     ]
 
 
-def test_assistant_questions_are_passed_through() -> None:
+def test_open_questions_do_not_block_a_complete_estimate() -> None:
     questions = ["Was the dressing on the side?"]
     evaluation = evaluate_meal(MealEstimate(**COMPLETE_MEAL, open_questions=questions))
+    assert evaluation.complete
+    assert evaluation.questions_for_user == questions
+
+
+def test_complete_correction_asks_no_more_questions() -> None:
+    evaluation = evaluate_meal(
+        MealEstimate(
+            **COMPLETE_MEAL,
+            replaces_meal_id=uuid.uuid4(),
+            open_questions=["Was it mostly broth?"],
+        )
+    )
+    assert evaluation.complete
+    assert evaluation.questions_for_user == []
+
+
+def test_open_questions_are_passed_through_when_values_are_missing() -> None:
+    questions = ["How many grams of meat were in your portion?"]
+    evaluation = evaluate_meal(MealEstimate(dish_name="Stew", open_questions=questions))
     assert not evaluation.complete
     assert evaluation.questions_for_user == questions
 
@@ -320,11 +340,31 @@ async def test_log_meal_rejects_impossible_values(mcp: Client[StreamableHttpTran
     assert result.is_error
 
 
-async def test_log_meal_rejects_eaten_at_without_timezone(
-    mcp: Client[StreamableHttpTransport],
+async def test_log_meal_accepts_eaten_at_without_offset(
+    app: FastAPI, mcp: Client[StreamableHttpTransport]
 ) -> None:
-    async with mcp:
-        result = await mcp.call_tool(
-            "log_meal", COMPLETE_MEAL | {"eaten_at": "2026-10-18T08:30:00"}, raise_on_error=False
-        )
-    assert result.is_error
+    content = await call_log_meal(mcp, COMPLETE_MEAL | {"eaten_at": "2026-10-17T19:00:00"})
+
+    assert content["status"] == "logged"
+    [meal] = await stored_meals(app)
+    # Stored as UTC until the user's time zone is known; the offset is recorded as unknown.
+    assert meal.eaten_at == datetime(2026, 10, 17, 19, 0, tzinfo=UTC)
+    assert meal.utc_offset_minutes is None
+
+
+async def test_log_meal_saves_estimate_with_open_questions(
+    app: FastAPI, mcp: Client[StreamableHttpTransport]
+) -> None:
+    questions = ["Did you drink the juice too?"]
+    content = await call_log_meal(
+        mcp, COMPLETE_MEAL | {"confidence": "low", "open_questions": questions}
+    )
+
+    assert content["status"] == "logged"
+    assert content["saved_to_healthy_eating"] is True
+    assert content["questions_for_user"] == questions
+    assert content["user_message"].startswith("Saved to HealthyEating:")
+    assert content["user_message"].endswith("I'll update it if your answer changes the estimate.")
+    assert "replaces_meal_id" in content["message"]
+    [meal] = await stored_meals(app)
+    assert meal.confidence == "low"

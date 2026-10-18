@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,7 +82,10 @@ def evaluate_meal(estimate: MealEstimate) -> MealEvaluation:
     """Decide whether the meal can be saved or the user has to be asked first.
 
     Every meal needs all four values. Values from the user's own calculation are kept
-    unchanged; anything else counts as estimated.
+    unchanged; anything else counts as estimated. A meal with all four values is saved even
+    when the assistant still has open questions: the questions are passed on and the answer
+    updates the same meal, so an unanswered question never loses a meal. A complete
+    correction (`replaces_meal_id`) passes no questions on, so each meal is asked about once.
     """
     meal = estimate
     warnings = []
@@ -108,6 +111,8 @@ def evaluate_meal(estimate: MealEstimate) -> MealEvaluation:
 
     missing = meal.missing_fields
     questions = list(meal.open_questions)
+    if meal.replaces_meal_id is not None and not missing:
+        questions = []
     if missing and not questions:
         if meal.source == "from_conversation":
             questions.append(COMPLETE_DETAILS_QUESTION)
@@ -121,7 +126,7 @@ def evaluate_meal(estimate: MealEstimate) -> MealEvaluation:
         warnings.extend(_energy_mismatch(meal))
 
     return MealEvaluation(
-        complete=not missing and not questions,
+        complete=not missing,
         meal=meal,
         missing_fields=missing,
         questions_for_user=questions,
@@ -171,8 +176,14 @@ async def save_meal(session: AsyncSession, user_id: uuid.UUID, meal: MealEstimat
     }
     if meal.eaten_at is not None:
         offset = meal.eaten_at.utcoffset()
-        values["eaten_at"] = meal.eaten_at
-        values["utc_offset_minutes"] = int(offset.total_seconds() // 60) if offset else 0
+        if offset is None:
+            # No offset given: store it as UTC and record the offset as unknown (None).
+            # TODO(#17): read it in the user's time zone once that is stored.
+            values["eaten_at"] = meal.eaten_at.replace(tzinfo=UTC)
+            values["utc_offset_minutes"] = None
+        else:
+            values["eaten_at"] = meal.eaten_at
+            values["utc_offset_minutes"] = int(offset.total_seconds() // 60)
 
     if meal.replaces_meal_id is None:
         row = Meal(user_id=user_id, **values)

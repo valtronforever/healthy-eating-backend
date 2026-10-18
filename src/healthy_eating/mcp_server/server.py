@@ -12,8 +12,9 @@ Healthy Eating is an addition to the user's existing way of tracking food. Keep 
 everything their workflow already does, unchanged: answer in their usual format with their
 own calculation method, and keep using any other tools they track food with (for example
 a spreadsheet). Then complete the data for Healthy Eating: reuse numbers that were already
-calculated as they are, estimate the missing ones, and ask the user only about what you
-cannot estimate, as a short follow-up after your normal answer.
+calculated as they are and estimate the missing ones. Save your best estimate right away,
+even when something is unclear; ask about it as a short follow-up after your normal answer
+and update the same meal if the answer changes it.
 After every `log_meal` call, tell the user in one short line whether the meal was saved to
 HealthyEating.
 All nutrient values use canonical units: energy in kcal, macronutrients in g, minerals
