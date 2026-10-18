@@ -63,7 +63,16 @@ Tests run against a real Postgres database (`healthy_eating_test`, created autom
 ```bash
 uv run pytest                     # or: docker compose exec app pytest
 uv run ruff check . && uv run ruff format --check .
-uv run mypy src tests
+uv run mypy src tests evals
+```
+
+### MCP evaluation suite
+
+[`evals/`](evals/README.md) checks how a real model uses the MCP tools: it starts the app, connects a real [opencode](https://opencode.ai) to it and runs chat scenarios (meal with the user's own numbers, photo, existing calorie workflow with a Sheets log, unclear portion, correction, meal eaten earlier, server failure, non-meal question), then checks the database, the tool calls and the replies. Run it after changing tool descriptions, server instructions or tool results. It needs opencode signed in to a model provider and uses its own database (`healthy_eating_eval`).
+
+```bash
+uv run python -m evals            # all scenarios, 3 runs each (about two minutes)
+uv run python -m evals --list
 ```
 
 ### Database migrations

@@ -60,6 +60,7 @@ src/healthy_eating/
 migrations/          # Alembic (async), dated revision files
 docker/postgres/init # creates the test database on first start
 tests/               # pytest, real Postgres; tests/oauth_helpers.py drives the OAuth flow
+evals/               # MCP evaluation suite: real model via opencode, run on demand (evals/README.md)
 docker-compose.yml   # local development stack
 Dockerfile           # targets: dev (reload) and prod (non-root)
 .env.example
@@ -84,7 +85,10 @@ uv run uvicorn --factory healthy_eating.main:create_app --reload
 # Checks (all must pass before finishing a change)
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
-uv run mypy src tests
+uv run mypy src tests evals
+
+# MCP evaluation with a real model through opencode (needs opencode signed in; ~2 min)
+uv run python -m evals
 
 # New migration after changing models (review the generated file by hand)
 uv run alembic revision --autogenerate -m "<message>"
@@ -133,6 +137,7 @@ Rules:
 - Never break the user's existing workflow. Users may already track food elsewhere (a ChatGPT project with their own calorie instructions, a Google Sheets log via another connector). The assistant keeps doing all of that unchanged (same answer format, same calculation, same other tools); HealthyEating is added on top.
 - Still collect complete data: every meal needs calories, protein, fat and carbohydrates. Numbers from the user's workflow (`source="from_conversation"`) are stored unchanged; the assistant estimates the missing ones and declares them in `estimated_fields`. A meal with all four values is always saved, even with `open_questions`: the questions go to the user after the normal answer, and the answer updates the same meal (`replaces_meal_id`; a complete correction asks nothing more). `needs_more_info` (nothing saved) is only for values that cannot be estimated at all. Never lose a meal because a question went unanswered.
 - Write tools report whether the data reached HealthyEating (`saved_to_healthy_eating` + `user_message`), so users can tell when the integration is not working.
+- After changing tool descriptions, parameters, results or the server `INSTRUCTIONS`, run the evaluation suite (`uv run python -m evals`) and report its result. Add a scenario in `evals/scenarios.py` for new workflow rules.
 
 ## Code conventions
 
