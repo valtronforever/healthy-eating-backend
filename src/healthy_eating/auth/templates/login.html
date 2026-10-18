@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Sign in · Healthy Eating{% endblock %}
+{% block content %}
+  <h1>Sign in to Healthy Eating</h1>
+  <p>
+    <strong>{{ pending.client_name }}</strong> wants to access your nutrition data.
+    After signing in you will be sent back to <strong>{{ pending.redirect_host }}</strong>.
+    A new account is created on your first sign-in.
+  </p>
+
+  <div class="stack">
+    {% for name, label in providers %}
+      <a class="button" href="{{ url_for('start_social_login', provider_name=name) }}">Continue with {{ label }}</a>
+    {% else %}
+      {% if not dev_login_enabled %}
+        <p>No sign-in providers are configured on this server. Ask the server operator to set one up.</p>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if dev_login_enabled %}
+    <form class="dev stack" method="post" action="{{ url_for('dev_login') }}">
+      <p class="muted">Development login: signs in as any email address without verification.</p>
+      <input type="email" name="email" placeholder="you@example.com" required>
+      <button type="submit">Sign in (dev)</button>
+    </form>
+  {% endif %}
+
+  <p class="muted"><a href="{{ url_for('cancel_login') }}">Cancel and go back</a></p>
+{% endblock %}
