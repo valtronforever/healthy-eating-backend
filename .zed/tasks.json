@@ -1,0 +1,28 @@
+// Zed project tasks. Run with `task: spawn` (cmd-shift-p) or `task: rerun`.
+[
+  {
+    "label": "Up",
+    "command": "docker compose up",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "Rebuild and Up",
+    "command": "docker compose up --build",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "Down",
+    "command": "docker compose down",
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    "hide": "on_success"
+  }
+]
