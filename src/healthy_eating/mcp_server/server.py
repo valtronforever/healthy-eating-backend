@@ -1,0 +1,30 @@
+from fastmcp import FastMCP
+
+from healthy_eating.auth.provider import PostgresOAuthProvider
+from healthy_eating.db import Database
+from healthy_eating.mcp_server.tools import meals, profile
+
+INSTRUCTIONS = """\
+Healthy Eating keeps the user's nutrition log on their own server.
+Whenever food the user ate comes up (a photo, a description, or a calorie calculation you
+or the user already made in this conversation), save it with `log_meal`.
+Healthy Eating is an addition to the user's existing way of tracking food. Keep doing
+everything their workflow already does, unchanged: answer in their usual format with their
+own calculation method, and keep using any other tools they track food with (for example
+a spreadsheet). Then complete the data for Healthy Eating: reuse numbers that were already
+calculated as they are, estimate the missing ones, and ask the user only about what you
+cannot estimate, as a short follow-up after your normal answer.
+After every `log_meal` call, tell the user in one short line whether the meal was saved to
+HealthyEating.
+All nutrient values use canonical units: energy in kcal, macronutrients in g, minerals
+in mg, trace elements and most vitamins in µg.
+The user can review statistics and progress in the Healthy Eating iOS app by signing
+in with the same account they used to connect here.
+"""
+
+
+def create_mcp_server(provider: PostgresOAuthProvider, db: Database) -> FastMCP:
+    mcp = FastMCP(name="Healthy Eating", instructions=INSTRUCTIONS, auth=provider)
+    profile.register(mcp, db)
+    meals.register(mcp, db)
+    return mcp
