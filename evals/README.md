@@ -65,6 +65,8 @@ second run's reset breaks the first (seen as a failed run and an opencode warm-u
 | `server_error` | Tool calls fail (proxy returns 503): nothing saved, the user is told it was not saved, no false "saved" claim |
 | `time_zone` | "I live in Berlin. Breakfast this morning at 8 ...": `set_timezone` stores `Europe/Berlin`, one meal saved with the user's numbers, no question about the time zone (notes: called before `log_meal`, stored at 08:00 Berlin time) |
 | `day_complete` | Meal with numbers plus "That's all I'm eating today": one meal saved and today marked complete by the assistant, without asking |
+| `what_did_i_eat` | Two meals already saved today: the assistant reads them (`get_daily_summary` or `list_meals`), gives the 830 kcal total, logs and deletes nothing, and makes no judgment about the intake |
+| `delete_duplicate` | The same oatmeal saved twice: `delete_meal` is called once, one copy remains, the user is told it was removed |
 | `not_food` | A nutrition question that is not a meal logs nothing |
 
 Checks are either required (decide pass or fail) or notes (reported only), for example

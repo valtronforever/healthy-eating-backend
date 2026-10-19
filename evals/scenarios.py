@@ -384,6 +384,58 @@ async def day_complete(env: EvalEnvironment, checks: Checks, turns: list[Turn]) 
     _require_confirmation(env, checks, turn.reply)
 
 
+JUDGMENT = re.compile(
+    r"\b(too (much|many|little)|went over|over your|under your|good job|well done|bad|unhealthy)\b",
+    re.IGNORECASE,
+)
+
+
+async def what_did_i_eat(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    await env.add_meal("Oatmeal with berries", (350, 12, 8, 55), minutes_ago=120)
+    await env.add_meal("Chicken salad", (480, 35, 30, 18), minutes_ago=30)
+    turn = await env.chat(
+        CHAT.name, "What have I eaten today so far, and how many calories is that?"
+    )
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    assert env.proxy is not None
+    reads = env.proxy.tool_calls("get_daily_summary") + env.proxy.tool_calls("list_meals")
+    checks.require("read the saved meals", bool(reads), str([c.name for c in env.proxy.calls]))
+    writes = env.proxy.tool_calls("log_meal") + env.proxy.tool_calls("delete_meal")
+    checks.require("nothing logged or deleted", not writes, str([c.name for c in writes]))
+    meals = await env.meals()
+    checks.require("meals unchanged", len(meals) == 2, _describe_meals(meals))
+    checks.require(
+        "reply gives the total (830 kcal)",
+        bool(re.search(r"\b830\b", turn.reply)),
+        turn.reply[-300:],
+    )
+    checks.require("no judgment of the intake", not JUDGMENT.search(turn.reply), turn.reply[-300:])
+
+
+async def delete_duplicate(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    await env.add_meal("Oatmeal", (300, 10, 6, 50), minutes_ago=60)
+    await env.add_meal("Oatmeal", (300, 10, 6, 50), minutes_ago=58)
+    turn = await env.chat(
+        CHAT.name, "Oops, I logged my oatmeal twice today by mistake. Please remove the extra one."
+    )
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    assert env.proxy is not None
+    deletes = env.proxy.tool_calls("delete_meal")
+    checks.require("delete_meal called once", len(deletes) == 1, f"{len(deletes)} calls")
+    checks.require("log_meal not called", not env.proxy.tool_calls("log_meal"), "")
+    meals = await env.meals()
+    checks.require("exactly one oatmeal left", len(meals) == 1, _describe_meals(meals))
+    told = any(
+        re.search(r"delet|remov", sentence, re.IGNORECASE) and not NEGATIVE.search(sentence)
+        for sentence in _healthy_eating_sentences(turn.reply)
+    )
+    checks.require("user told it was removed from HealthyEating", told, turn.reply[-300:])
+
+
 async def correction(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
     first = await env.chat(
         CHAT.name,
@@ -491,6 +543,16 @@ SCENARIOS = [
         "day_complete",
         "The user says they are done for the day: meal saved and today marked complete",
         day_complete,
+    ),
+    Scenario(
+        "what_did_i_eat",
+        "Two saved meals: the assistant reads them back and gives the total, neutrally",
+        what_did_i_eat,
+    ),
+    Scenario(
+        "delete_duplicate",
+        "A meal saved twice: the assistant deletes exactly one copy",
+        delete_duplicate,
     ),
     Scenario("server_error", "When saving fails, the user is told it was not saved", server_error),
     Scenario("not_food", "A food question that is not a meal logs nothing", not_food),

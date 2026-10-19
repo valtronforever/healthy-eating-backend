@@ -63,9 +63,10 @@ Also:
   dish separately.
 - The user corrects a meal that was already saved: call again with `replaces_meal_id` set
   to the `meal_id` from the earlier result, so the meal is not counted twice.
-- Meals eaten earlier (for example "yesterday's dinner"): set `eaten_at`, with the user's UTC
-  offset if you know it. Never ask the user for their offset or time zone. Leave `eaten_at`
-  empty for meals eaten just now.
+- Meals eaten earlier ("yesterday evening", "this morning", "at lunch"): always set
+  `eaten_at`, with the user's UTC offset if you know it. Without it the meal is saved as
+  eaten right now and counts for the wrong day. Never ask the user for their offset or time
+  zone. Leave `eaten_at` empty only for meals eaten just now.
 """
 
 FIELD_LABELS: dict[NutrientField, str] = {

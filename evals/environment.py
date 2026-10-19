@@ -229,6 +229,31 @@ class EvalEnvironment:
             )
             return time_zone
 
+    async def add_meal(
+        self,
+        dish_name: str,
+        values: tuple[float, float, float, float],
+        *,
+        minutes_ago: int = 30,
+    ) -> Meal:
+        """Save a meal for the eval user directly, as if an earlier conversation had logged it."""
+        calories, protein, fat, carbs = values
+        async with self.db.session() as session:
+            meal = Meal(
+                user_id=self.user_id,
+                dish_name=dish_name,
+                source="from_conversation",
+                eaten_at=utcnow() - timedelta(minutes=minutes_ago),
+                calories_kcal=calories,
+                protein_g=protein,
+                fat_g=fat,
+                carbohydrates_g=carbs,
+                estimated_fields=[],
+                confidence="high",
+            )
+            session.add(meal)
+        return meal
+
     async def day_statuses(self) -> list[DayStatusRecord]:
         async with self.db.session() as session:
             rows = await session.scalars(select(DayStatusRecord))
