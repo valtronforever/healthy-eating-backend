@@ -5,23 +5,59 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import false as sa_false
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from healthy_eating.db.base import Base, TimestampMixin
-from healthy_eating.nutrition.types import CONFIDENCE_VALUES, MEAL_SOURCES, NUTRIENT_FIELDS
+from healthy_eating.nutrition.types import (
+    CONFIDENCE_VALUES,
+    ENERGY_UNITS,
+    MEAL_SOURCES,
+    NUTRIENT_FIELDS,
+)
 
 
 def _one_of(column: str, values: tuple[str, ...]) -> str:
     return f"{column} IN ({', '.join(repr(v) for v in values)})"
 
 
+def _target_range(field: str) -> str:
+    low, high = f"target_{field}_min", f"target_{field}_max"
+    return (
+        f"({low} IS NULL OR {low} >= 0) AND ({high} IS NULL OR {high} >= 0) "
+        f"AND ({low} IS NULL OR {high} IS NULL OR {low} <= {high})"
+    )
+
+
 class User(TimestampMixin, Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(_one_of("energy_unit", ENERGY_UNITS), name="energy_unit"),
+        *(
+            CheckConstraint(_target_range(field), name=f"target_{field}")
+            for field in NUTRIENT_FIELDS
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     display_name: Mapped[str | None] = mapped_column(String(255))
     primary_email: Mapped[str | None] = mapped_column(String(320))
+
+    # Settings. IANA time zone name (e.g. "Europe/Berlin"); NULL until the user or the app
+    # sets it. Local days are computed in it (see services/local_time.py).
+    timezone: Mapped[str | None] = mapped_column(String(64))
+    energy_unit: Mapped[str] = mapped_column(String(4), default="kcal", server_default="kcal")
+    calm_mode: Mapped[bool] = mapped_column(default=False, server_default=sa_false())
+    # Daily target ranges in canonical units; either bound may be open (NULL).
+    target_calories_kcal_min: Mapped[float | None]
+    target_calories_kcal_max: Mapped[float | None]
+    target_protein_g_min: Mapped[float | None]
+    target_protein_g_max: Mapped[float | None]
+    target_fat_g_min: Mapped[float | None]
+    target_fat_g_max: Mapped[float | None]
+    target_carbohydrates_g_min: Mapped[float | None]
+    target_carbohydrates_g_max: Mapped[float | None]
 
     identities: Mapped[list[Identity]] = relationship(
         back_populates="user", cascade="all, delete-orphan", passive_deletes=True
@@ -154,8 +190,8 @@ class Meal(TimestampMixin, Base):
     source: Mapped[str] = mapped_column(String(32))
     source_note: Mapped[str | None] = mapped_column(String(200))
     eaten_at: Mapped[datetime]
-    # Offset of the local time the user gave for eaten_at, to group meals by local day.
-    # NULL when the time was not given (eaten "just now").
+    # UTC offset of the local time of eaten_at, to group meals by local day: the offset the
+    # user gave, or the one of their time zone at that moment. NULL when neither was known.
     utc_offset_minutes: Mapped[int | None]
     portion_grams: Mapped[float | None]
     calories_kcal: Mapped[float]

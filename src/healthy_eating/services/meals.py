@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +15,8 @@ from healthy_eating.nutrition.types import (
     MealSource,
     NutrientField,
 )
+from healthy_eating.services.local_time import resolve_eaten_at
+from healthy_eating.services.settings import get_time_zone
 
 # Atwater factors: kcal per gram of protein, fat and carbohydrates.
 KCAL_PER_G_PROTEIN = 4.0
@@ -174,21 +176,15 @@ async def save_meal(session: AsyncSession, user_id: uuid.UUID, meal: MealEstimat
         "estimated_fields": list(meal.estimated_fields),
         "confidence": meal.confidence,
     }
-    if meal.eaten_at is not None:
-        offset = meal.eaten_at.utcoffset()
-        if offset is None:
-            # No offset given: store it as UTC and record the offset as unknown (None).
-            # TODO(#17): read it in the user's time zone once that is stored.
-            values["eaten_at"] = meal.eaten_at.replace(tzinfo=UTC)
-            values["utc_offset_minutes"] = None
-        else:
-            values["eaten_at"] = meal.eaten_at
-            values["utc_offset_minutes"] = int(offset.total_seconds() // 60)
+    # A correction keeps the original time unless it gives a new one.
+    if meal.eaten_at is not None or meal.replaces_meal_id is None:
+        time_zone = await get_time_zone(session, user_id)
+        values["eaten_at"], values["utc_offset_minutes"] = resolve_eaten_at(
+            meal.eaten_at, time_zone, now=utcnow()
+        )
 
     if meal.replaces_meal_id is None:
         row = Meal(user_id=user_id, **values)
-        if meal.eaten_at is None:
-            row.eaten_at = utcnow()
         session.add(row)
     else:
         found = await session.scalar(
@@ -199,7 +195,6 @@ async def save_meal(session: AsyncSession, user_id: uuid.UUID, meal: MealEstimat
         if found is None:
             raise MealNotFoundError
         row = found
-        # Keep the original eaten_at unless the correction gives a new one.
         for name, value in values.items():
             setattr(row, name, value)
 

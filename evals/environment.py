@@ -158,6 +158,7 @@ class EvalEnvironment:
         """Forget everything from the previous scenario run."""
         async with self.db.session() as session:
             await session.execute(text("DELETE FROM meals"))
+            await session.execute(text("UPDATE users SET timezone = NULL"))
         self.sheets_log.unlink(missing_ok=True)
         assert self.proxy is not None
         self.proxy.reset()
@@ -218,6 +219,14 @@ class EvalEnvironment:
         async with self.db.session() as session:
             rows = await session.scalars(select(Meal).order_by(Meal.created_at))
             return list(rows)
+
+    async def time_zone(self) -> str | None:
+        """The time zone stored for the eval user."""
+        async with self.db.session() as session:
+            time_zone: str | None = await session.scalar(
+                select(User.timezone).where(User.id == self.user_id)
+            )
+            return time_zone
 
     def sheet_rows(self) -> list[dict[str, Any]]:
         if not self.sheets_log.exists():

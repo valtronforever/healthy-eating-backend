@@ -9,6 +9,7 @@ import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from evals.environment import FIXTURES_DIR, EvalEnvironment, Turn
 from evals.personas import CALORIE_PROJECT, CHAT
@@ -315,6 +316,49 @@ async def earlier_meal(env: EvalEnvironment, checks: Checks, turns: list[Turn]) 
     _require_confirmation(env, checks, turn.reply)
 
 
+async def time_zone(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    turn = await env.chat(
+        CHAT.name,
+        "I live in Berlin. Breakfast this morning at 8: muesli with yogurt. "
+        "I worked it out: 420 kcal, 18 g protein, 12 g fat, 58 g carbs.",
+    )
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    stored = await env.time_zone()
+    checks.require("time zone stored as Europe/Berlin", stored == "Europe/Berlin", str(stored))
+    meals = await env.meals()
+    checks.require("exactly one meal saved", len(meals) == 1, _describe_meals(meals))
+    if meals:
+        meal = meals[0]
+        checks.require(
+            "user's numbers stored unchanged",
+            _values(meal) == (420, 18, 12, 58),
+            f"stored {_values(meal)}",
+        )
+        local = meal.eaten_at.astimezone(ZoneInfo("Europe/Berlin"))
+        checks.note(
+            "eaten at 08:00 Berlin time",
+            (local.hour, local.minute) == (8, 0),
+            f"eaten_at={local.isoformat()} offset={meal.utc_offset_minutes}",
+        )
+    assert env.proxy is not None
+    order = [call.name for call in env.proxy.calls]
+    checks.note(
+        "set_timezone called before log_meal",
+        "set_timezone" in order
+        and "log_meal" in order
+        and order.index("set_timezone") < order.index("log_meal"),
+        str(order),
+    )
+    checks.require(
+        "does not ask the user for a time zone",
+        not re.search(r"time ?zone\?|which time ?zone|what time ?zone", turn.reply, re.IGNORECASE),
+        turn.reply[-300:],
+    )
+    _require_confirmation(env, checks, turn.reply)
+
+
 async def correction(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
     first = await env.chat(
         CHAT.name,
@@ -412,6 +456,11 @@ SCENARIOS = [
         "earlier_meal",
         "A meal eaten earlier is saved (with a valid time or none)",
         earlier_meal,
+    ),
+    Scenario(
+        "time_zone",
+        "The user says where they live: the time zone is stored and the meal saved",
+        time_zone,
     ),
     Scenario("server_error", "When saving fails, the user is told it was not saved", server_error),
     Scenario("not_food", "A food question that is not a meal logs nothing", not_food),

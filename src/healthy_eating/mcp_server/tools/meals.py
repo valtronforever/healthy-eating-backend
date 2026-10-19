@@ -217,7 +217,7 @@ def register(mcp: FastMCP, db: Database) -> None:
                 description=(
                     "Only for meals eaten earlier: when, as ISO 8601, with the user's UTC offset "
                     "if known (e.g. '2026-10-18T08:30:00+02:00'); a time without an offset is "
-                    "accepted. Leave empty for 'just now'."
+                    "read in the user's time zone. Leave empty for 'just now'."
                 )
             ),
         ] = None,

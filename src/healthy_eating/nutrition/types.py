@@ -13,3 +13,7 @@ MEAL_SOURCES: tuple[MealSource, ...] = get_args(MealSource)
 
 NutrientField = Literal["calories_kcal", "protein_g", "fat_g", "carbohydrates_g"]
 NUTRIENT_FIELDS: tuple[NutrientField, ...] = get_args(NutrientField)
+
+# Unit the user wants energy shown in. Energy is always stored in kcal.
+EnergyUnit = Literal["kcal", "kj"]
+ENERGY_UNITS: tuple[EnergyUnit, ...] = get_args(EnergyUnit)

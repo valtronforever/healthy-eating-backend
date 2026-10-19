@@ -62,6 +62,7 @@ and recreated on every run**), `--opencode` (binary), `--turn-timeout`.
 | `correction` | A correction updates the same meal via `replaces_meal_id`; no duplicate |
 | `earlier_meal` | "Yesterday evening I had ...": saved with the user's numbers, dated yesterday (not "now"), and the user is never asked for a UTC offset or time zone |
 | `server_error` | Tool calls fail (proxy returns 503): nothing saved, the user is told it was not saved, no false "saved" claim |
+| `time_zone` | "I live in Berlin. Breakfast this morning at 8 ...": `set_timezone` stores `Europe/Berlin`, one meal saved with the user's numbers, no question about the time zone (notes: called before `log_meal`, stored at 08:00 Berlin time) |
 | `not_food` | A nutrition question that is not a meal logs nothing |
 
 Checks are either required (decide pass or fail) or notes (reported only), for example
