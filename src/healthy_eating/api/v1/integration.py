@@ -18,7 +18,7 @@ class IntegrationStatusResponse(BaseModel):
     meals_today: int = Field(description="Meals eaten on the user's local today")
 
 
-@router.get("/integration-status")
+@router.get("/integration-status", operation_id="getIntegrationStatus")
 async def read_integration_status(
     user_id: CurrentUserId, session: SessionDep
 ) -> IntegrationStatusResponse:

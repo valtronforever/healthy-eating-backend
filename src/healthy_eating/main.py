@@ -5,10 +5,14 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from healthy_eating import __version__
 from healthy_eating.api import health, v1
+from healthy_eating.api.errors import api_http_error, api_validation_error
+from healthy_eating.api.openapi import v1_openapi
 from healthy_eating.auth import routes as auth_routes
 from healthy_eating.auth.provider import PostgresOAuthProvider
 from healthy_eating.auth.social import SocialLogin
@@ -48,9 +52,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         https_only=settings.is_https,
     )
 
+    app.add_exception_handler(HTTPException, api_http_error)
+    app.add_exception_handler(RequestValidationError, api_validation_error)
+
     app.include_router(health.router)
     app.include_router(auth_routes.router)
     app.include_router(v1.router)
+    app.add_api_route("/api/v1/openapi.json", v1_openapi, include_in_schema=False)
     # The MCP app serves /mcp plus the OAuth endpoints (/authorize, /token, /register,
     # /revoke, /.well-known/*). Mounted last so the routes above take precedence.
     app.mount("/", mcp_app)

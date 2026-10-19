@@ -14,6 +14,7 @@ router = APIRouter(tags=["account"])
 
 @router.get(
     "/export",
+    operation_id="exportData",
     response_class=StreamingResponse,
     responses={
         200: {

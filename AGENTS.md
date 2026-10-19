@@ -11,7 +11,7 @@ Healthy Eating is an open-source (MIT), self-hostable app for tracking nutrition
 
 The LLM in the user's MCP client (Claude, ChatGPT, etc.) recognizes the food and estimates portions. The backend does **not** call an LLM. Its tools accept structured input (food items + amounts), look up nutrient data, compute totals and persist them.
 
-Status: early v1. Implemented: OAuth 2.1 server with social and dev login, MCP endpoint with `get_profile`, `set_timezone`, `log_meal` (meals stored in the `meals` table), `set_day_status`, `list_meals`, `get_daily_summary` and `delete_meal` tools, REST `/api/v1/me`, `/api/v1/me/settings`, `/api/v1/meals` (list, get, correct, delete), `/api/v1/days` (daily summaries), `/api/v1/days/{date}/status`, `/api/v1/trends`, `/api/v1/integration-status` and `/api/v1/connections`, Docker dev stack, tests. The OpenAPI contract and the production setup are next. Keep this file in sync when the layout or commands change.
+Status: early v1. Implemented: OAuth 2.1 server with social and dev login, MCP endpoint with `get_profile`, `set_timezone`, `log_meal` (meals stored in the `meals` table), `set_day_status`, `list_meals`, `get_daily_summary` and `delete_meal` tools, REST `/api/v1/me`, `/api/v1/me/settings`, `/api/v1/meals` (list, get, correct, delete), `/api/v1/days` (daily summaries), `/api/v1/days/{date}/status`, `/api/v1/trends`, `/api/v1/integration-status` and `/api/v1/connections`, Docker dev stack, tests. The production setup is next. Keep this file in sync when the layout or commands change.
 
 ## Hard constraints
 
@@ -53,6 +53,8 @@ src/healthy_eating/
     tools/           # one module per tool group, each exposing register(mcp, db)
   api/
     deps.py          # SessionDep, CurrentUserId (bearer token auth)
+    errors.py        # ErrorResponse {code, message, details} for everything under /api/
+    openapi.py       # the /api/v1 contract; `python -m healthy_eating.api.openapi` prints it
     health.py        # /health
     v1/              # REST routers for the iOS app
   services/          # business logic shared by MCP tools and REST
@@ -62,6 +64,7 @@ docker/postgres/init # creates the test database on first start
 tests/               # pytest, real Postgres; tests/oauth_helpers.py drives the OAuth flow
 evals/               # MCP evaluation suite: real model via opencode, run on demand (evals/README.md)
 docs/                # documentation for users and self-hosters (export-format.md)
+openapi.json         # committed snapshot of the /api/v1 contract (tests fail if it drifts)
 docker-compose.yml   # local development stack
 Dockerfile           # targets: dev (reload) and prod (non-root)
 .env.example
@@ -90,6 +93,9 @@ uv run mypy src tests evals
 
 # MCP evaluation with a real model through opencode (needs opencode signed in; ~2 min)
 uv run python -m evals
+
+# After changing the REST API: regenerate the committed contract snapshot
+uv run python -m healthy_eating.api.openapi > openapi.json
 
 # New migration after changing models (review the generated file by hand)
 uv run alembic revision --autogenerate -m "<message>"
@@ -147,6 +153,7 @@ Rules:
 
 - Fully typed, async I/O only (no blocking calls in request paths).
 - Pydantic v2 models for all external input/output; SQLAlchemy models are not returned directly.
+- Every `/api/v1` route has an explicit camelCase `operation_id`, a response model and its error statuses documented with `error_response()`; errors are raised as `HTTPException` and reach the client as `{code, message, details}`. Additions are fine; anything that breaks the contract needs `/api/v2`. Regenerate `openapi.json` and commit it with the change.
 - Every DB query in a request is scoped to the authenticated user. Add a test for cross-user access when adding an endpoint or tool.
 - Schema changes only via Alembic migrations, reviewed by hand after autogenerate.
 - Tests: unit tests for `nutrition/` and `services/`; integration tests against a real Postgres (docker) for DB, auth and MCP flows. Mock upstream OIDC providers.

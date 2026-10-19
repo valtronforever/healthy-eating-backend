@@ -9,7 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from healthy_eating.auth.provider import PostgresOAuthProvider
 from healthy_eating.db import Database
 
-bearer_scheme = HTTPBearer(auto_error=False)
+bearer_scheme = HTTPBearer(
+    auto_error=False,
+    scheme_name="BearerAuth",
+    description=(
+        "Access token from this server's OAuth 2.1 flow (/authorize with PKCE, then /token). "
+        "The same tokens work for the MCP endpoint."
+    ),
+)
 
 
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:

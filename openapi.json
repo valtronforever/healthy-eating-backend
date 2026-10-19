@@ -1,0 +1,2149 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Healthy Eating API",
+    "description": "REST API of a self-hosted Healthy Eating server, used by the iOS app.\n\nAuthenticate with an access token from the server's OAuth 2.1 flow. Errors use one format:\n`{\"code\", \"message\", \"details\"}`. Dates are the user's local days (YYYY-MM-DD); times are\nISO 8601 with a UTC offset. Energy is in kcal, macronutrients and portions in grams.\n",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/me": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Get Me",
+        "description": "The signed-in user's account.",
+        "operationId": "getAccount",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Delete Me",
+        "description": "Delete the account and all of its data, and end every sign-in. Cannot be undone.",
+        "operationId": "deleteAccount",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/settings": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Read Settings",
+        "description": "The signed-in user's settings.",
+        "operationId": "getSettings",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Change Settings",
+        "description": "Change some of the signed-in user's settings and return all of them.",
+        "operationId": "updateSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/meals": {
+      "get": {
+        "tags": [
+          "meals"
+        ],
+        "summary": "Read Meals",
+        "description": "The signed-in user's meals on the given local days, newest first.",
+        "operationId": "listMeals",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "First local day (YYYY-MM-DD), inclusive",
+              "title": "From"
+            },
+            "description": "First local day (YYYY-MM-DD), inclusive"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Last local day (YYYY-MM-DD), inclusive",
+              "title": "To"
+            },
+            "description": "Last local day (YYYY-MM-DD), inclusive"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "next_cursor of the previous page",
+              "title": "Cursor"
+            },
+            "description": "next_cursor of the previous page"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid range or cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/meals/{meal_id}": {
+      "get": {
+        "tags": [
+          "meals"
+        ],
+        "summary": "Read Meal",
+        "description": "One of the signed-in user's meals.",
+        "operationId": "getMeal",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "meals"
+        ],
+        "summary": "Update Meal",
+        "description": "Correct one of the signed-in user's meals in place (same meal id).",
+        "operationId": "updateMeal",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealUpdateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "meals"
+        ],
+        "summary": "Remove Meal",
+        "description": "Delete one of the signed-in user's meals.",
+        "operationId": "deleteMeal",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meal Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/days": {
+      "get": {
+        "tags": [
+          "days"
+        ],
+        "summary": "Read Days",
+        "description": "Totals per local day, how much was estimated, and completeness.",
+        "operationId": "listDays",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "First local day (YYYY-MM-DD)",
+              "title": "From"
+            },
+            "description": "First local day (YYYY-MM-DD)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Last local day (YYYY-MM-DD), inclusive",
+              "title": "To"
+            },
+            "description": "Last local day (YYYY-MM-DD), inclusive"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DaysResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid range or cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/days/{day}/status": {
+      "put": {
+        "tags": [
+          "days"
+        ],
+        "summary": "Mark Day",
+        "description": "Mark one of the user's local days as complete or partial.",
+        "operationId": "setDayStatus",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "day",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Day"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayStatusUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "days"
+        ],
+        "summary": "Unmark Day",
+        "description": "Remove the mark of a day; 404 if the day was not marked.",
+        "operationId": "clearDayStatus",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "day",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Day"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trends": {
+      "get": {
+        "tags": [
+          "days"
+        ],
+        "summary": "Read Trends",
+        "description": "Averages per counted day over the window, compared with the window before.",
+        "operationId": "getTrends",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "window",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Window length in days: 7, 30 or 90",
+              "enum": [
+                7,
+                30,
+                90
+              ],
+              "default": 7,
+              "title": "Window"
+            },
+            "description": "Window length in days: 7, 30 or 90"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrendsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/integration-status": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Read Integration Status",
+        "description": "Whether meals are arriving from the AI assistant. Contains no meal contents.",
+        "operationId": "getIntegrationStatus",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/connections": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Read Connections",
+        "description": "AI assistants and app sessions signed in to this account.",
+        "operationId": "listConnections",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/connections/{grant_id}": {
+      "delete": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Disconnect",
+        "description": "Revoke one sign-in and all of its tokens. Revoking the current one signs the app out.",
+        "operationId": "revokeConnection",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "grant_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Grant Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/export": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Export",
+        "description": "Download all of the user's data: account, logins, settings, connections, days, meals.",
+        "operationId": "exportData",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "json",
+                "csv"
+              ],
+              "type": "string",
+              "description": "'json', or 'csv' (a ZIP)",
+              "default": "json",
+              "title": "Format"
+            },
+            "description": "'json', or 'csv' (a ZIP)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All of the user's data; format described in docs/export-format.md",
+            "content": {
+              "application/json": {},
+              "application/zip": {}
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ConnectionResponse": {
+        "properties": {
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ai_assistant",
+              "ios_app"
+            ],
+            "title": "Kind",
+            "description": "'ai_assistant' (MCP client) or 'ios_app'"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/GrantResponse"
+            },
+            "type": "array",
+            "title": "Grants",
+            "description": "Active sign-ins of this client, oldest first"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_id",
+          "name",
+          "kind",
+          "grants"
+        ],
+        "title": "ConnectionResponse"
+      },
+      "ConnectionsResponse": {
+        "properties": {
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/ConnectionResponse"
+            },
+            "type": "array",
+            "title": "Connections",
+            "description": "Most recently used first"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connections"
+        ],
+        "title": "ConnectionsResponse"
+      },
+      "DayStatusResponse": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial"
+            ],
+            "title": "Status"
+          },
+          "set_by": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Set By",
+            "description": "'user' (the app) or 'assistant' (MCP)"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "status",
+          "set_by",
+          "updated_at"
+        ],
+        "title": "DayStatusResponse"
+      },
+      "DayStatusUpdate": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial"
+            ],
+            "title": "Status",
+            "description": "'complete': every meal of the day is logged; 'partial': some are missing"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "DayStatusUpdate"
+      },
+      "DaySummaryResponse": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "meal_count": {
+            "type": "integer",
+            "title": "Meal Count"
+          },
+          "calories_kcal": {
+            "type": "number",
+            "title": "Calories Kcal"
+          },
+          "protein_g": {
+            "type": "number",
+            "title": "Protein G"
+          },
+          "fat_g": {
+            "type": "number",
+            "title": "Fat G"
+          },
+          "carbohydrates_g": {
+            "type": "number",
+            "title": "Carbohydrates G"
+          },
+          "estimated_calories_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Calories Share",
+            "description": "Share of the day's calories the assistant estimated (0 to 1); null without calories"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "partial"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status",
+            "description": "Completeness mark; null if the day is not marked"
+          },
+          "status_set_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "assistant"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Set By"
+          },
+          "counted": {
+            "type": "boolean",
+            "title": "Counted",
+            "description": "Whether the day counts for averages (see counting_rule)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "meal_count",
+          "calories_kcal",
+          "protein_g",
+          "fat_g",
+          "carbohydrates_g",
+          "estimated_calories_share",
+          "status",
+          "status_set_by",
+          "counted"
+        ],
+        "title": "DaySummaryResponse"
+      },
+      "DaysResponse": {
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DaySummaryResponse"
+            },
+            "type": "array",
+            "title": "Days",
+            "description": "Every local day of the range, oldest first"
+          },
+          "counting_rule": {
+            "type": "string",
+            "enum": [
+              "complete_days",
+              "logged_days"
+            ],
+            "title": "Counting Rule",
+            "description": "'complete_days': only days marked complete count (the user has marked one); 'logged_days': every day with meals counts except days marked partial. Days without meals never count."
+          }
+        },
+        "type": "object",
+        "required": [
+          "days",
+          "counting_rule"
+        ],
+        "title": "DaysResponse"
+      },
+      "DeleteAccountRequest": {
+        "properties": {
+          "confirm": {
+            "type": "string",
+            "const": "delete-account",
+            "title": "Confirm",
+            "description": "Must be 'delete-account', so an account is never deleted by accident"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "confirm"
+        ],
+        "title": "DeleteAccountRequest"
+      },
+      "ErrorDetail": {
+        "properties": {
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field",
+            "description": "The invalid input, e.g. 'calories_kcal' or 'from'"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "message"
+        ],
+        "title": "ErrorDetail"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Machine-readable: bad_request, unauthorized, forbidden, not_found, conflict, invalid_request or error"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Human-readable explanation"
+          },
+          "details": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorDetail"
+            },
+            "type": "array",
+            "title": "Details",
+            "description": "Per-field problems for invalid_request"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorResponse"
+      },
+      "GrantResponse": {
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Grant Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When this sign-in happened"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At",
+            "description": "Last use, recorded at most once a minute"
+          },
+          "current": {
+            "type": "boolean",
+            "title": "Current",
+            "description": "True for the sign-in making this request"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grant_id",
+          "created_at",
+          "last_used_at",
+          "current"
+        ],
+        "title": "GrantResponse"
+      },
+      "IntegrationStatusResponse": {
+        "properties": {
+          "last_meal_saved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Meal Saved At",
+            "description": "When the latest meal reached Healthy Eating (not when it was eaten)"
+          },
+          "last_client_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Client Name",
+            "description": "The AI assistant that saved it, if known"
+          },
+          "meals_today": {
+            "type": "integer",
+            "title": "Meals Today",
+            "description": "Meals eaten on the user's local today"
+          }
+        },
+        "type": "object",
+        "required": [
+          "last_meal_saved_at",
+          "last_client_name",
+          "meals_today"
+        ],
+        "title": "IntegrationStatusResponse"
+      },
+      "MeResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "linked_logins": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Linked Logins"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "display_name",
+          "email",
+          "linked_logins"
+        ],
+        "title": "MeResponse"
+      },
+      "MealListResponse": {
+        "properties": {
+          "meals": {
+            "items": {
+              "$ref": "#/components/schemas/MealResponse"
+            },
+            "type": "array",
+            "title": "Meals",
+            "description": "Newest first"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor",
+            "description": "Pass as `cursor` to get the next page; null on the last page"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meals",
+          "next_cursor"
+        ],
+        "title": "MealListResponse"
+      },
+      "MealResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "dish_name": {
+            "type": "string",
+            "title": "Dish Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "eaten_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Eaten At",
+            "description": "When the meal was eaten, in its local time with the UTC offset: the offset the user gave, or the one of their time zone"
+          },
+          "local_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Local Date",
+            "description": "The user's local day the meal counts for"
+          },
+          "portion_grams": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portion Grams"
+          },
+          "calories_kcal": {
+            "type": "number",
+            "title": "Calories Kcal"
+          },
+          "protein_g": {
+            "type": "number",
+            "title": "Protein G"
+          },
+          "fat_g": {
+            "type": "number",
+            "title": "Fat G"
+          },
+          "carbohydrates_g": {
+            "type": "number",
+            "title": "Carbohydrates G"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "estimated_by_assistant",
+              "from_conversation"
+            ],
+            "title": "Source",
+            "description": "'from_conversation': values came from the user's own workflow; 'estimated_by_assistant': the assistant estimated them"
+          },
+          "source_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Note"
+          },
+          "estimated_fields": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "calories_kcal",
+                "protein_g",
+                "fat_g",
+                "carbohydrates_g"
+              ]
+            },
+            "type": "array",
+            "title": "Estimated Fields",
+            "description": "Values the assistant estimated rather than took from the user's workflow"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence"
+          },
+          "client_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Name",
+            "description": "The AI assistant that saved the meal, if known"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "dish_name",
+          "description",
+          "eaten_at",
+          "local_date",
+          "portion_grams",
+          "calories_kcal",
+          "protein_g",
+          "fat_g",
+          "carbohydrates_g",
+          "source",
+          "source_note",
+          "estimated_fields",
+          "confidence",
+          "client_name",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "MealResponse"
+      },
+      "MealUpdate": {
+        "properties": {
+          "dish_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dish Name"
+          },
+          "portion_grams": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 5000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portion Grams"
+          },
+          "calories_kcal": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calories Kcal"
+          },
+          "protein_g": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein G"
+          },
+          "fat_g": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fat G"
+          },
+          "carbohydrates_g": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Carbohydrates G"
+          },
+          "eaten_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eaten At",
+            "description": "ISO 8601; without an offset it is read in the user's time zone"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MealUpdate",
+        "description": "Only the fields present are changed; only portion_grams may be null (removes it).\n\nChanged nutrition values become the user's own and lose their \"estimated\" mark."
+      },
+      "MealUpdateResponse": {
+        "properties": {
+          "meal": {
+            "$ref": "#/components/schemas/MealResponse"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "description": "Possible problems with the values, e.g. calories that do not match the macros"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meal",
+          "warnings"
+        ],
+        "title": "MealUpdateResponse"
+      },
+      "Nutrients": {
+        "properties": {
+          "calories_kcal": {
+            "type": "number",
+            "title": "Calories Kcal"
+          },
+          "protein_g": {
+            "type": "number",
+            "title": "Protein G"
+          },
+          "fat_g": {
+            "type": "number",
+            "title": "Fat G"
+          },
+          "carbohydrates_g": {
+            "type": "number",
+            "title": "Carbohydrates G"
+          }
+        },
+        "type": "object",
+        "required": [
+          "calories_kcal",
+          "protein_g",
+          "fat_g",
+          "carbohydrates_g"
+        ],
+        "title": "Nutrients"
+      },
+      "PeriodResponse": {
+        "properties": {
+          "first_day": {
+            "type": "string",
+            "format": "date",
+            "title": "First Day"
+          },
+          "last_day": {
+            "type": "string",
+            "format": "date",
+            "title": "Last Day"
+          },
+          "counted_days": {
+            "type": "integer",
+            "title": "Counted Days",
+            "description": "Days the averages are taken over"
+          },
+          "logged_days": {
+            "type": "integer",
+            "title": "Logged Days",
+            "description": "Days with at least one meal, counted or not"
+          },
+          "averages": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Nutrients"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average per counted day; null if none counts"
+          },
+          "estimated_calories_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Calories Share",
+            "description": "Share of the counted days' calories the assistant estimated (0 to 1)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_day",
+          "last_day",
+          "counted_days",
+          "logged_days",
+          "averages",
+          "estimated_calories_share"
+        ],
+        "title": "PeriodResponse"
+      },
+      "RevokeResponse": {
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Grant Id"
+          },
+          "signed_out": {
+            "type": "boolean",
+            "title": "Signed Out",
+            "description": "True if this was the sign-in making the request: its tokens no longer work, so the app is signed out"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grant_id",
+          "signed_out"
+        ],
+        "title": "RevokeResponse"
+      },
+      "SettingsResponse": {
+        "properties": {
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone",
+            "description": "IANA time zone, e.g. 'Europe/Berlin'; null if unknown"
+          },
+          "energy_unit": {
+            "type": "string",
+            "enum": [
+              "kcal",
+              "kj"
+            ],
+            "title": "Energy Unit",
+            "description": "Unit to show energy in; values stay in kcal"
+          },
+          "calm_mode": {
+            "type": "boolean",
+            "title": "Calm Mode"
+          },
+          "targets": {
+            "$ref": "#/components/schemas/Targets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timezone",
+          "energy_unit",
+          "calm_mode",
+          "targets"
+        ],
+        "title": "SettingsResponse"
+      },
+      "SettingsUpdate": {
+        "properties": {
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
+          },
+          "energy_unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "kcal",
+                  "kj"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Unit"
+          },
+          "calm_mode": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calm Mode"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Targets"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "SettingsUpdate",
+        "description": "Only the fields present are changed. null clears the time zone or a target."
+      },
+      "TargetRangeModel": {
+        "properties": {
+          "min": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          }
+        },
+        "type": "object",
+        "title": "TargetRangeModel",
+        "description": "A daily target range. Either bound may be open (null), never both."
+      },
+      "Targets": {
+        "properties": {
+          "calories_kcal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TargetRangeModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "protein_g": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TargetRangeModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fat_g": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TargetRangeModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "carbohydrates_g": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TargetRangeModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "Targets",
+        "description": "Daily targets in canonical units; null means no target."
+      },
+      "TrendsResponse": {
+        "properties": {
+          "window_days": {
+            "type": "integer",
+            "title": "Window Days"
+          },
+          "counting_rule": {
+            "type": "string",
+            "enum": [
+              "complete_days",
+              "logged_days"
+            ],
+            "title": "Counting Rule"
+          },
+          "current": {
+            "$ref": "#/components/schemas/PeriodResponse",
+            "description": "The window ending today; today counts only once marked complete"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/PeriodResponse",
+            "description": "The window of the same length before it"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Nutrients"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "current minus previous averages; null unless both have counted days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "window_days",
+          "counting_rule",
+          "current",
+          "previous",
+          "change"
+        ],
+        "title": "TrendsResponse"
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "description": "Access token from this server's OAuth 2.1 flow (/authorize with PKCE, then /token). The same tokens work for the MCP endpoint.",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

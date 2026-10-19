@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
+from healthy_eating.api.errors import error_response
 from healthy_eating.services.users import delete_user, get_user
 
 router = APIRouter(tags=["account"])
@@ -17,7 +18,7 @@ class MeResponse(BaseModel):
     linked_logins: list[str]
 
 
-@router.get("/me")
+@router.get("/me", operation_id="getAccount", responses={404: error_response("Not found")})
 async def get_me(user_id: CurrentUserId, session: SessionDep) -> MeResponse:
     """The signed-in user's account."""
     user = await get_user(session, user_id)
@@ -39,7 +40,12 @@ class DeleteAccountRequest(BaseModel):
     )
 
 
-@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="deleteAccount",
+    responses={404: error_response("Not found")},
+)
 async def delete_me(
     body: DeleteAccountRequest, user_id: CurrentUserId, session: SessionDep
 ) -> Response:

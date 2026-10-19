@@ -53,7 +53,7 @@ def _period(period: Period) -> PeriodResponse:
     )
 
 
-@router.get("/trends")
+@router.get("/trends", operation_id="getTrends")
 async def read_trends(
     user_id: CurrentUserId,
     session: SessionDep,

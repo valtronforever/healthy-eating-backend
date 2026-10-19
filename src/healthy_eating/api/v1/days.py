@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
+from healthy_eating.api.errors import error_response
 from healthy_eating.db.base import utcnow
 from healthy_eating.nutrition.types import DayStatus, StatusSetter
 from healthy_eating.services.days import (
@@ -87,7 +88,9 @@ def _day_response(day: DaySummary) -> DaySummaryResponse:
     )
 
 
-@router.get("/days")
+@router.get(
+    "/days", operation_id="listDays", responses={400: error_response("Invalid range or cursor")}
+)
 async def read_days(
     user_id: CurrentUserId,
     session: SessionDep,
@@ -107,7 +110,7 @@ async def read_days(
     )
 
 
-@router.put("/days/{day}/status")
+@router.put("/days/{day}/status", operation_id="setDayStatus")
 async def mark_day(
     day: date, update: DayStatusUpdate, user_id: CurrentUserId, session: SessionDep
 ) -> DayStatusResponse:
@@ -119,7 +122,12 @@ async def mark_day(
     return day_status_response(info)
 
 
-@router.delete("/days/{day}/status", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/days/{day}/status",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="clearDayStatus",
+    responses={404: error_response("Not found")},
+)
 async def unmark_day(day: date, user_id: CurrentUserId, session: SessionDep) -> Response:
     """Remove the mark of a day; 404 if the day was not marked."""
     if not await clear_day_status(session, user_id, day):

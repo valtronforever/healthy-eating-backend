@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
+from healthy_eating.api.errors import error_response
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, EnergyUnit, NutrientField
 from healthy_eating.services.settings import (
     InvalidSettingsError,
@@ -107,7 +108,9 @@ def _response(settings: UserSettings) -> SettingsResponse:
     )
 
 
-@router.get("/me/settings")
+@router.get(
+    "/me/settings", operation_id="getSettings", responses={404: error_response("Not found")}
+)
 async def read_settings(user_id: CurrentUserId, session: SessionDep) -> SettingsResponse:
     """The signed-in user's settings."""
     settings = await get_settings(session, user_id)
@@ -116,7 +119,9 @@ async def read_settings(user_id: CurrentUserId, session: SessionDep) -> Settings
     return _response(settings)
 
 
-@router.patch("/me/settings")
+@router.patch(
+    "/me/settings", operation_id="updateSettings", responses={404: error_response("Not found")}
+)
 async def change_settings(
     changes: SettingsUpdate, user_id: CurrentUserId, session: SessionDep
 ) -> SettingsResponse:

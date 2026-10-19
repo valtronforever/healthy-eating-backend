@@ -7,6 +7,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep, bearer_scheme
+from healthy_eating.api.errors import error_response
 from healthy_eating.db.base import utcnow
 from healthy_eating.services.connections import (
     ConnectionKind,
@@ -54,7 +55,7 @@ async def _current_grant(session: SessionDep, credentials: BearerCredentials) ->
     return await grant_of_access_token(session, credentials.credentials)
 
 
-@router.get("/connections")
+@router.get("/connections", operation_id="listConnections")
 async def read_connections(
     user_id: CurrentUserId, session: SessionDep, credentials: BearerCredentials
 ) -> ConnectionsResponse:
@@ -82,7 +83,11 @@ async def read_connections(
     )
 
 
-@router.delete("/connections/{grant_id}")
+@router.delete(
+    "/connections/{grant_id}",
+    operation_id="revokeConnection",
+    responses={404: error_response("Not found")},
+)
 async def disconnect(
     grant_id: uuid.UUID, user_id: CurrentUserId, session: SessionDep, credentials: BearerCredentials
 ) -> RevokeResponse:

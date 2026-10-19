@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
+from healthy_eating.api.errors import error_response
 from healthy_eating.nutrition.types import Confidence, MealSource, NutrientField
 from healthy_eating.services.meals import (
     MAX_CALORIES_KCAL,
@@ -143,7 +144,9 @@ def _decode_cursor(value: str) -> MealCursor:
     return cursor
 
 
-@router.get("/meals")
+@router.get(
+    "/meals", operation_id="listMeals", responses={400: error_response("Invalid range or cursor")}
+)
 async def read_meals(
     user_id: CurrentUserId,
     session: SessionDep,
@@ -172,7 +175,9 @@ async def read_meals(
     )
 
 
-@router.get("/meals/{meal_id}")
+@router.get(
+    "/meals/{meal_id}", operation_id="getMeal", responses={404: error_response("Not found")}
+)
 async def read_meal(
     meal_id: uuid.UUID, user_id: CurrentUserId, session: SessionDep
 ) -> MealResponse:
@@ -183,7 +188,9 @@ async def read_meal(
     return _meal_response(meal)
 
 
-@router.patch("/meals/{meal_id}")
+@router.patch(
+    "/meals/{meal_id}", operation_id="updateMeal", responses={404: error_response("Not found")}
+)
 async def update_meal(
     meal_id: uuid.UUID, update: MealUpdate, user_id: CurrentUserId, session: SessionDep
 ) -> MealUpdateResponse:
@@ -194,7 +201,12 @@ async def update_meal(
     return MealUpdateResponse(meal=_meal_response(edited.meal), warnings=edited.warnings)
 
 
-@router.delete("/meals/{meal_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/meals/{meal_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="deleteMeal",
+    responses={404: error_response("Not found")},
+)
 async def remove_meal(meal_id: uuid.UUID, user_id: CurrentUserId, session: SessionDep) -> Response:
     """Delete one of the signed-in user's meals."""
     if not await delete_meal(session, user_id, meal_id):
