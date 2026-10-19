@@ -4,11 +4,11 @@ import uuid
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 
-from sqlalchemy import delete, select, tuple_
+from sqlalchemy import Select, delete, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from healthy_eating.db.base import utcnow
-from healthy_eating.db.models import Meal
+from healthy_eating.db.models import Meal, OAuthClient
 from healthy_eating.nutrition.types import (
     NUTRIENT_FIELDS,
     Confidence,
@@ -177,8 +177,13 @@ class MealNotFoundError(Exception):
     """The meal to correct does not exist or belongs to another user."""
 
 
-async def save_meal(session: AsyncSession, user_id: uuid.UUID, meal: MealEstimate) -> Meal:
-    """Store a complete meal. With `replaces_meal_id`, the existing meal is updated in place."""
+async def save_meal(
+    session: AsyncSession, user_id: uuid.UUID, meal: MealEstimate, client_id: str | None = None
+) -> Meal:
+    """Store a complete meal. With `replaces_meal_id`, the existing meal is updated in place.
+
+    `client_id` is the AI assistant saving the meal; a correction keeps the original one.
+    """
     missing = meal.missing_fields
     if missing:
         raise ValueError(f"Meal is incomplete, missing: {', '.join(missing)}")
@@ -204,7 +209,7 @@ async def save_meal(session: AsyncSession, user_id: uuid.UUID, meal: MealEstimat
         )
 
     if meal.replaces_meal_id is None:
-        row = Meal(user_id=user_id, **values)
+        row = Meal(user_id=user_id, client_id=client_id, **values)
         session.add(row)
     else:
         found = await session.scalar(
@@ -227,6 +232,8 @@ class LocalMeal:
     meal: Meal
     # When the meal was eaten, in its local time (see services/local_time.py).
     eaten_at: datetime
+    # Name of the AI assistant that saved the meal, if known.
+    client_name: str | None
 
 
 @dataclass(frozen=True)
@@ -243,10 +250,20 @@ class MealPage:
     next_cursor: MealCursor | None
 
 
-def _local(meal: Meal, time_zone: str | None) -> LocalMeal:
+CLIENT_NAME = OAuthClient.client_info["client_name"].astext
+
+
+def _local(meal: Meal, time_zone: str | None, client_name: str | None) -> LocalMeal:
     return LocalMeal(
         meal=meal,
         eaten_at=local_eaten_at(meal.eaten_at, meal.utc_offset_minutes, time_zone),
+        client_name=client_name,
+    )
+
+
+def _with_client_name(query: Select[Meal]) -> Select[Meal, str | None]:
+    return query.add_columns(CLIENT_NAME).outerjoin(
+        OAuthClient, OAuthClient.client_id == Meal.client_id
     )
 
 
@@ -272,21 +289,26 @@ async def list_meals(
         query = query.where(tuple_(Meal.eaten_at, Meal.id) < tuple_(after.eaten_at, after.meal_id))
     query = query.order_by(Meal.eaten_at.desc(), Meal.id.desc()).limit(limit + 1)
 
-    rows = list(await session.scalars(query))
+    rows = list(await session.execute(_with_client_name(query)))
     next_cursor = None
     if len(rows) > limit:
         rows = rows[:limit]
-        next_cursor = MealCursor(eaten_at=rows[-1].eaten_at, meal_id=rows[-1].id)
-    return MealPage(meals=[_local(row, time_zone) for row in rows], next_cursor=next_cursor)
+        last = rows[-1][0]
+        next_cursor = MealCursor(eaten_at=last.eaten_at, meal_id=last.id)
+    return MealPage(
+        meals=[_local(meal, time_zone, name) for meal, name in rows], next_cursor=next_cursor
+    )
 
 
 async def get_meal(
     session: AsyncSession, user_id: uuid.UUID, meal_id: uuid.UUID
 ) -> LocalMeal | None:
-    meal = await session.scalar(select(Meal).where(Meal.id == meal_id, Meal.user_id == user_id))
-    if meal is None:
+    query = select(Meal).where(Meal.id == meal_id, Meal.user_id == user_id)
+    row = (await session.execute(_with_client_name(query))).first()
+    if row is None:
         return None
-    return _local(meal, await get_time_zone(session, user_id))
+    meal, client_name = row
+    return _local(meal, await get_time_zone(session, user_id), client_name)
 
 
 async def delete_meal(session: AsyncSession, user_id: uuid.UUID, meal_id: uuid.UUID) -> bool:
@@ -357,4 +379,9 @@ async def edit_meal(
         warnings = energy_mismatch(
             meal.calories_kcal, meal.protein_g, meal.fat_g, meal.carbohydrates_g
         )
-    return EditedMeal(meal=_local(meal, time_zone), warnings=warnings)
+    client_name = None
+    if meal.client_id is not None:
+        client_name = await session.scalar(
+            select(CLIENT_NAME).where(OAuthClient.client_id == meal.client_id)
+        )
+    return EditedMeal(meal=_local(meal, time_zone, client_name), warnings=warnings)

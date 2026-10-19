@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from healthy_eating.db import Database
 from healthy_eating.db.models import Meal
-from healthy_eating.mcp_server.context import current_user_id
+from healthy_eating.mcp_server.context import current_client_id, current_user_id
 from healthy_eating.nutrition.types import Confidence, MealSource, NutrientField
 from healthy_eating.services.meals import (
     MAX_CALORIES_KCAL,
@@ -285,7 +285,7 @@ def register(mcp: FastMCP, db: Database) -> None:
         meal = evaluation.meal
         try:
             async with db.session() as session:
-                row = await save_meal(session, current_user_id(), meal)
+                row = await save_meal(session, current_user_id(), meal, current_client_id())
                 saved = _saved_meal(row)
         except MealNotFoundError:
             raise ToolError(

@@ -54,6 +54,7 @@ class MealResponse(BaseModel):
         description="Values the assistant estimated rather than took from the user's workflow"
     )
     confidence: Confidence
+    client_name: str | None = Field(description="The AI assistant that saved the meal, if known")
     created_at: datetime
     updated_at: datetime
 
@@ -119,6 +120,7 @@ def _meal_response(local: LocalMeal) -> MealResponse:
         source_note=meal.source_note,
         estimated_fields=meal.estimated_fields,
         confidence=meal.confidence,
+        client_name=local.client_name,
         created_at=meal.created_at,
         updated_at=meal.updated_at,
     )

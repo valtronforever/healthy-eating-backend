@@ -10,3 +10,11 @@ def current_user_id() -> uuid.UUID:
     if token is None or token.subject is None:
         raise ToolError("Not authenticated")
     return uuid.UUID(token.subject)
+
+
+def current_client_id() -> str:
+    """The OAuth client (AI assistant) making this request."""
+    token = get_access_token()
+    if token is None:
+        raise ToolError("Not authenticated")
+    return token.client_id

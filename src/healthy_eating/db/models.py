@@ -203,6 +203,10 @@ class Meal(TimestampMixin, Base):
     # Values the assistant estimated, as opposed to values from the user's own workflow.
     estimated_fields: Mapped[list[str]] = mapped_column(ARRAY(Text))
     confidence: Mapped[str] = mapped_column(String(8))
+    # The OAuth client (AI assistant) that saved the meal; corrections keep it.
+    client_id: Mapped[str | None] = mapped_column(
+        ForeignKey("oauth_clients.client_id", ondelete="SET NULL")
+    )
 
 
 class DayStatusRecord(TimestampMixin, Base):
