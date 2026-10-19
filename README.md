@@ -7,7 +7,7 @@ Self-hostable backend for **Healthy Eating**, an open-source nutrition tracker: 
 - **REST API** (`/api/v1`) for the [iOS app](https://github.com/valtronforever/healthy-eating-ios).
 - **PostgreSQL** storage. A deployment is just this app plus Postgres.
 
-Status: early development. Authentication, the MCP endpoint (tools `get_profile`, `set_timezone`, `log_meal`, `set_day_status`, `list_meals`, `get_daily_summary` and `delete_meal`) and the REST API for the account, settings (`/api/v1/me/settings`) and meals (`/api/v1/meals`: list by local day, get, correct, delete) daily summaries (`/api/v1/days`), day completeness (`/api/v1/days/{date}/status`) trends (`/api/v1/trends`) and the integration status (`/api/v1/integration-status`) work; statistics and the remaining nutrition features are in progress.
+Status: early development. Authentication, the MCP endpoint (tools `get_profile`, `set_timezone`, `log_meal`, `set_day_status`, `list_meals`, `get_daily_summary` and `delete_meal`) and the REST API for the account, settings (`/api/v1/me/settings`) and meals (`/api/v1/meals`: list by local day, get, correct, delete) daily summaries (`/api/v1/days`), day completeness (`/api/v1/days/{date}/status`) trends (`/api/v1/trends`) the integration status (`/api/v1/integration-status`) and connected clients (`/api/v1/connections`) work; statistics and the remaining nutrition features are in progress.
 
 ## Quick start (Docker)
 

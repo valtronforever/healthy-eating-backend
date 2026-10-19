@@ -24,7 +24,7 @@ from mcp.server.auth.provider import (
 from mcp.server.auth.settings import ClientRegistrationOptions, RevocationOptions
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 from pydantic import AnyUrl
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from healthy_eating.auth.tokens import generate_token, hash_token
@@ -34,10 +34,12 @@ from healthy_eating.db.base import utcnow
 from healthy_eating.db.models import (
     AccessTokenRecord,
     AuthorizationCodeRecord,
+    Grant,
     LoginRequest,
     OAuthClient,
     RefreshTokenRecord,
 )
+from healthy_eating.services.connections import record_grant_use, revoke_grant
 
 SCOPES = ["nutrition"]
 
@@ -203,9 +205,11 @@ class PostgresOAuthProvider(OAuthProvider):
             )
             if user_id is None:
                 raise TokenError(error="invalid_grant", error_description="Code already used")
+            grant_id = uuid.uuid4()
+            session.add(Grant(id=grant_id, user_id=user_id, client_id=authorization_code.client_id))
             return self._issue_tokens(
                 session,
-                grant_id=uuid.uuid4(),
+                grant_id=grant_id,
                 client_id=authorization_code.client_id,
                 user_id=user_id,
                 scopes=authorization_code.scopes,
@@ -266,10 +270,12 @@ class PostgresOAuthProvider(OAuthProvider):
     # Access tokens
 
     async def load_access_token(self, token: str) -> AccessToken | None:
+        now = utcnow()
         async with self._db.session() as session:
             record = await session.get(AccessTokenRecord, hash_token(token))
-        if record is None or record.revoked_at is not None or record.expires_at <= utcnow():
-            return None
+            if record is None or record.revoked_at is not None or record.expires_at <= now:
+                return None
+            await record_grant_use(session, record.grant_id, now=now)
         return AccessToken(
             token=token,
             client_id=record.client_id,
@@ -333,10 +339,4 @@ class PostgresOAuthProvider(OAuthProvider):
         )
 
     async def _revoke_grant(self, session: AsyncSession, grant_id: uuid.UUID) -> None:
-        now = utcnow()
-        for model in (AccessTokenRecord, RefreshTokenRecord):
-            await session.execute(
-                update(model)
-                .where(model.grant_id == grant_id, model.revoked_at.is_(None))
-                .values(revoked_at=now)
-            )
+        await revoke_grant(session, grant_id, now=utcnow())

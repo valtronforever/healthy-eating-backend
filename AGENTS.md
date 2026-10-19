@@ -11,7 +11,7 @@ Healthy Eating is an open-source (MIT), self-hostable app for tracking nutrition
 
 The LLM in the user's MCP client (Claude, ChatGPT, etc.) recognizes the food and estimates portions. The backend does **not** call an LLM. Its tools accept structured input (food items + amounts), look up nutrient data, compute totals and persist them.
 
-Status: early v1. Implemented: OAuth 2.1 server with social and dev login, MCP endpoint with `get_profile`, `set_timezone`, `log_meal` (meals stored in the `meals` table), `set_day_status`, `list_meals`, `get_daily_summary` and `delete_meal` tools, REST `/api/v1/me`, `/api/v1/me/settings`, `/api/v1/meals` (list, get, correct, delete), `/api/v1/days` (daily summaries), `/api/v1/days/{date}/status`, `/api/v1/trends` and `/api/v1/integration-status`, Docker dev stack, tests. Connections, export and account deletion are next. Keep this file in sync when the layout or commands change.
+Status: early v1. Implemented: OAuth 2.1 server with social and dev login, MCP endpoint with `get_profile`, `set_timezone`, `log_meal` (meals stored in the `meals` table), `set_day_status`, `list_meals`, `get_daily_summary` and `delete_meal` tools, REST `/api/v1/me`, `/api/v1/me/settings`, `/api/v1/meals` (list, get, correct, delete), `/api/v1/days` (daily summaries), `/api/v1/days/{date}/status`, `/api/v1/trends`, `/api/v1/integration-status` and `/api/v1/connections`, Docker dev stack, tests. Export and account deletion are next. Keep this file in sync when the layout or commands change.
 
 ## Hard constraints
 
@@ -114,7 +114,7 @@ Rules:
 - Apple: client secret is an ES256 JWT generated on the fly; callback is `form_post` (POST); the user's name is only sent on first login, so persist it then.
 - Microsoft: use the `common` endpoint; validate the issuer against the `https://login.microsoftonline.com/{tenantid}/v2.0` template.
 - Strict redirect URI validation: `https`, loopback (`http://127.0.0.1` / `localhost`) and the app's custom scheme only.
-- Auth codes are short-lived and single-use. All tokens are opaque and stored only as SHA-256 hashes. Tokens issued together share a `grant_id`; refresh tokens rotate, and presenting a rotated refresh token again revokes the whole grant.
+- Auth codes are short-lived and single-use. All tokens are opaque and stored only as SHA-256 hashes. Every sign-in is a row in `grants`; its tokens share the `grant_id`. Refresh tokens rotate, and presenting a rotated refresh token again revokes the whole grant. Revoke grants only through `services/connections.py:revoke_grant`, so the grant row and all tokens end together.
 - Expose `/.well-known/oauth-authorization-server` and `/.well-known/oauth-protected-resource`. The MCP endpoint and the REST API accept the same bearer tokens.
 - `DEV_LOGIN_ENABLED` adds an email-only login for local development and tests. `Settings` refuses it in production; never weaken that check.
 - Library behavior to keep in mind: FastMCP answers `invalid_grant` with HTTP 401 (MCP spec), the MCP SDK's `/revoke` requires a `client_secret` form field even for public clients (send it empty), and the issuer (`BASE_URL`) must be `https` or `localhost`.

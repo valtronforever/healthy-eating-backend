@@ -112,6 +112,26 @@ class LoginRequest(Base):
     expires_at: Mapped[datetime]
 
 
+class Grant(TimestampMixin, Base):
+    """One sign-in of a client (an AI assistant or the iOS app) for a user.
+
+    Its access and refresh tokens share the grant id; revoking the grant ends them all.
+    """
+
+    __tablename__ = "grants"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    client_id: Mapped[str] = mapped_column(
+        ForeignKey("oauth_clients.client_id", ondelete="CASCADE")
+    )
+    # Updated at most once per minute when an access token of the grant is used.
+    last_used_at: Mapped[datetime | None]
+    revoked_at: Mapped[datetime | None]
+
+
 class AuthorizationCodeRecord(Base):
     __tablename__ = "authorization_codes"
 
