@@ -11,14 +11,14 @@ Healthy Eating is an open-source (MIT), self-hostable app for tracking nutrition
 
 The LLM in the user's MCP client (Claude, ChatGPT, etc.) recognizes the food and estimates portions. The backend does **not** call an LLM. Its tools accept structured input (food items + amounts), look up nutrient data, compute totals and persist them.
 
-Status: early v1. Implemented: OAuth 2.1 server with social and dev login, MCP endpoint with `get_profile`, `set_timezone`, `log_meal` (meals stored in the `meals` table), `set_day_status`, `list_meals`, `get_daily_summary` and `delete_meal` tools, REST `/api/v1/me`, `/api/v1/me/settings`, `/api/v1/meals` (list, get, correct, delete), `/api/v1/days` (daily summaries), `/api/v1/days/{date}/status`, `/api/v1/trends`, `/api/v1/integration-status` and `/api/v1/connections`, Docker dev stack, tests. Export and account deletion are next. Keep this file in sync when the layout or commands change.
+Status: early v1. Implemented: OAuth 2.1 server with social and dev login, MCP endpoint with `get_profile`, `set_timezone`, `log_meal` (meals stored in the `meals` table), `set_day_status`, `list_meals`, `get_daily_summary` and `delete_meal` tools, REST `/api/v1/me`, `/api/v1/me/settings`, `/api/v1/meals` (list, get, correct, delete), `/api/v1/days` (daily summaries), `/api/v1/days/{date}/status`, `/api/v1/trends`, `/api/v1/integration-status` and `/api/v1/connections`, Docker dev stack, tests. Data export is next. Keep this file in sync when the layout or commands change.
 
 ## Hard constraints
 
 1. **Open source only.** Every dependency must use an MIT-compatible license (MIT, BSD, Apache-2.0, ISC, PSF). No GPL/AGPL/SSPL, no proprietary SDKs, no required SaaS. Check the license before adding a dependency.
 2. **Self-hostable with minimal moving parts.** A deployment is this app + PostgreSQL (+ optional reverse proxy). Do not add services such as Redis, Keycloak or message queues without an explicit decision.
 3. **All configuration via environment variables** (documented in `.env.example`). Features with external credentials, like each social provider, are enabled only when their variables are set.
-4. **Health data is sensitive** (likely GDPR Art. 9). Never log meal contents, nutrient values, tokens or emails. Support full account export and deletion.
+4. **Health data is sensitive** (likely GDPR Art. 9). Never log meal contents, nutrient values, tokens or emails. Support full account export and deletion. `DELETE /api/v1/me` relies on `ON DELETE CASCADE` from every user-owned table to `users`: give each new user-owned table that foreign key (`tests/test_delete_account.py` checks every table with a `user_id` column).
 
 ## Tech stack
 

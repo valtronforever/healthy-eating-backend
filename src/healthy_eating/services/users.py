@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -56,3 +56,10 @@ async def get_user(session: AsyncSession, user_id: uuid.UUID) -> User | None:
     return await session.scalar(
         select(User).where(User.id == user_id).options(selectinload(User.identities))
     )
+
+
+async def delete_user(session: AsyncSession, user_id: uuid.UUID) -> bool:
+    """Delete the account and, through the database's cascades, all of its data: identities,
+    settings, meals, day statuses, sign-ins and tokens. False if the user does not exist."""
+    deleted = await session.scalar(delete(User).where(User.id == user_id).returning(User.id))
+    return deleted is not None
