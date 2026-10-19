@@ -1,6 +1,7 @@
 from datetime import date, datetime
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
@@ -11,6 +12,12 @@ from healthy_eating.services.days import (
     FutureDayError,
     clear_day_status,
     set_day_status,
+)
+from healthy_eating.services.summaries import (
+    CountingRule,
+    DaySummary,
+    RangeTooLongError,
+    daily_summaries,
 )
 
 router = APIRouter(tags=["days"])
@@ -34,6 +41,69 @@ class DayStatusResponse(BaseModel):
 def day_status_response(info: DayStatusInfo) -> DayStatusResponse:
     return DayStatusResponse(
         date=info.local_date, status=info.status, set_by=info.set_by, updated_at=info.updated_at
+    )
+
+
+class DaySummaryResponse(BaseModel):
+    date: date
+    meal_count: int
+    calories_kcal: float
+    protein_g: float
+    fat_g: float
+    carbohydrates_g: float
+    estimated_calories_share: float | None = Field(
+        description=(
+            "Share of the day's calories the assistant estimated (0 to 1); null without calories"
+        )
+    )
+    status: DayStatus | None = Field(description="Completeness mark; null if the day is not marked")
+    status_set_by: StatusSetter | None
+    counted: bool = Field(description="Whether the day counts for averages (see counting_rule)")
+
+
+class DaysResponse(BaseModel):
+    days: list[DaySummaryResponse] = Field(description="Every local day of the range, oldest first")
+    counting_rule: CountingRule = Field(
+        description=(
+            "'complete_days': only days marked complete count (the user has marked one); "
+            "'logged_days': every day with meals counts except days marked partial. "
+            "Days without meals never count."
+        )
+    )
+
+
+def _day_response(day: DaySummary) -> DaySummaryResponse:
+    return DaySummaryResponse(
+        date=day.local_date,
+        meal_count=day.meal_count,
+        calories_kcal=day.calories_kcal,
+        protein_g=day.protein_g,
+        fat_g=day.fat_g,
+        carbohydrates_g=day.carbohydrates_g,
+        estimated_calories_share=day.estimated_calories_share,
+        status=day.status,
+        status_set_by=day.status_set_by,
+        counted=day.counted,
+    )
+
+
+@router.get("/days")
+async def read_days(
+    user_id: CurrentUserId,
+    session: SessionDep,
+    from_: Annotated[date, Query(alias="from", description="First local day (YYYY-MM-DD)")],
+    to: Annotated[date, Query(description="Last local day (YYYY-MM-DD), inclusive")],
+) -> DaysResponse:
+    """Totals per local day, how much was estimated, and completeness."""
+    if from_ > to:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="`from` is after `to`")
+    try:
+        summaries = await daily_summaries(session, user_id, from_, to)
+    except RangeTooLongError as error:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(error)) from None
+    return DaysResponse(
+        days=[_day_response(day) for day in summaries.days],
+        counting_rule=summaries.counting_rule,
     )
 
 

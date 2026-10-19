@@ -39,6 +39,7 @@ async def add_meal(
     utc_offset_minutes: int | None = None,
     dish_name: str = "Toast",
     meal_id: uuid.UUID | None = None,
+    **overrides: Any,
 ) -> uuid.UUID:
     db: Database = app.state.db
     async with db.session() as session:
@@ -56,6 +57,8 @@ async def add_meal(
             estimated_fields=["calories_kcal", "protein_g", "fat_g", "carbohydrates_g"],
             confidence="medium",
         )
+        for name, value in overrides.items():
+            setattr(meal, name, value)
         session.add(meal)
     return meal.id
 
