@@ -22,11 +22,19 @@ from healthy_eating.services.local_time import (
     utc_window,
 )
 from healthy_eating.services.settings import get_time_zone
+from healthy_eating.services.unset import UNSET, Unset
 
 # Atwater factors: kcal per gram of protein, fat and carbohydrates.
 KCAL_PER_G_PROTEIN = 4.0
 KCAL_PER_G_FAT = 9.0
 KCAL_PER_G_CARBS = 4.0
+
+# Input limits, shared by log_meal and the meals API.
+MAX_DISH_NAME_LENGTH = 200
+MAX_DESCRIPTION_LENGTH = 1000
+MAX_PORTION_GRAMS = 5000
+MAX_CALORIES_KCAL = 10000
+MAX_MACRONUTRIENT_G = 1000
 
 # Stated calories and calories derived from macros may differ by this much before we warn.
 ENERGY_TOLERANCE_RATIO = 0.2
@@ -146,14 +154,21 @@ def _energy_mismatch(meal: MealEstimate) -> list[str]:
     assert meal.protein_g is not None
     assert meal.fat_g is not None
     assert meal.carbohydrates_g is not None
-    derived = energy_from_macros(meal.protein_g, meal.fat_g, meal.carbohydrates_g)
-    difference = abs(derived - meal.calories_kcal)
+    return energy_mismatch(meal.calories_kcal, meal.protein_g, meal.fat_g, meal.carbohydrates_g)
+
+
+def energy_mismatch(
+    calories_kcal: float, protein_g: float, fat_g: float, carbohydrates_g: float
+) -> list[str]:
+    """A warning (not an error) when calories and the 4/9/4 energy of the macros differ a lot."""
+    derived = energy_from_macros(protein_g, fat_g, carbohydrates_g)
+    difference = abs(derived - calories_kcal)
     if difference <= ENERGY_TOLERANCE_KCAL:
         return []
-    if difference <= ENERGY_TOLERANCE_RATIO * max(meal.calories_kcal, derived):
+    if difference <= ENERGY_TOLERANCE_RATIO * max(calories_kcal, derived):
         return []
     return [
-        f"Calories ({meal.calories_kcal:.0f} kcal) do not match the macronutrients "
+        f"Calories ({calories_kcal:.0f} kcal) do not match the macronutrients "
         f"({derived:.0f} kcal from 4/9/4 kcal per g of protein/fat/carbohydrates)."
     ]
 
@@ -280,3 +295,66 @@ async def delete_meal(session: AsyncSession, user_id: uuid.UUID, meal_id: uuid.U
         delete(Meal).where(Meal.id == meal_id, Meal.user_id == user_id).returning(Meal.id)
     )
     return deleted is not None
+
+
+@dataclass(frozen=True)
+class MealEdit:
+    """Changes the user makes to a meal in the app. UNSET leaves a field as it is."""
+
+    dish_name: str | Unset = UNSET
+    # None removes the portion weight.
+    portion_grams: float | Unset | None = UNSET
+    calories_kcal: float | Unset = UNSET
+    protein_g: float | Unset = UNSET
+    fat_g: float | Unset = UNSET
+    carbohydrates_g: float | Unset = UNSET
+    # A time without an offset is read in the user's time zone, as in log_meal.
+    eaten_at: datetime | Unset = UNSET
+
+
+@dataclass(frozen=True)
+class EditedMeal:
+    meal: LocalMeal
+    warnings: list[str]
+
+
+async def edit_meal(
+    session: AsyncSession, user_id: uuid.UUID, meal_id: uuid.UUID, edit: MealEdit
+) -> EditedMeal | None:
+    """Apply the user's corrections to the same meal. None if the meal is not the user's.
+
+    A value the user changes is the user's own number, so it is no longer marked as estimated.
+    A value sent unchanged keeps its mark, so an edit form may send every field.
+    """
+    meal = await session.scalar(
+        select(Meal).where(Meal.id == meal_id, Meal.user_id == user_id).with_for_update()
+    )
+    if meal is None:
+        return None
+    time_zone = await get_time_zone(session, user_id)
+
+    if not isinstance(edit.dish_name, Unset):
+        meal.dish_name = edit.dish_name
+    if not isinstance(edit.portion_grams, Unset):
+        meal.portion_grams = edit.portion_grams
+    if not isinstance(edit.eaten_at, Unset):
+        meal.eaten_at, meal.utc_offset_minutes = resolve_eaten_at(
+            edit.eaten_at, time_zone, now=utcnow()
+        )
+
+    changed: list[NutrientField] = []
+    for name in NUTRIENT_FIELDS:
+        value = getattr(edit, name)
+        if not isinstance(value, Unset) and value != getattr(meal, name):
+            setattr(meal, name, value)
+            changed.append(name)
+    if changed:
+        meal.estimated_fields = [name for name in meal.estimated_fields if name not in changed]
+
+    await session.flush()
+    warnings = []
+    if changed:
+        warnings = energy_mismatch(
+            meal.calories_kcal, meal.protein_g, meal.fat_g, meal.carbohydrates_g
+        )
+    return EditedMeal(meal=_local(meal, time_zone), warnings=warnings)

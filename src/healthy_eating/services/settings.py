@@ -3,7 +3,6 @@
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from enum import Enum
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,13 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from healthy_eating.db.models import User
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, EnergyUnit, NutrientField
 from healthy_eating.services.local_time import is_valid_time_zone
-
-
-class _Unset(Enum):
-    UNSET = "unset"
-
-
-UNSET = _Unset.UNSET
+from healthy_eating.services.unset import UNSET, Unset
 
 
 class InvalidSettingsError(ValueError):
@@ -56,9 +49,9 @@ class UserSettings:
 class SettingsChanges:
     """Settings to change. UNSET leaves a setting as it is; None clears it."""
 
-    timezone: str | _Unset | None = UNSET
-    energy_unit: EnergyUnit | _Unset = UNSET
-    calm_mode: bool | _Unset = UNSET
+    timezone: str | Unset | None = UNSET
+    energy_unit: EnergyUnit | Unset = UNSET
+    calm_mode: bool | Unset = UNSET
     # Only the targets listed here change; None clears a target.
     targets: Mapping[NutrientField, TargetRange | None] = field(default_factory=dict)
 
@@ -103,11 +96,11 @@ async def update_settings(
     user = await session.get(User, user_id, with_for_update=True)
     if user is None:
         return None
-    if not isinstance(changes.timezone, _Unset):
+    if not isinstance(changes.timezone, Unset):
         user.timezone = None if changes.timezone is None else validate_time_zone(changes.timezone)
-    if not isinstance(changes.energy_unit, _Unset):
+    if not isinstance(changes.energy_unit, Unset):
         user.energy_unit = changes.energy_unit
-    if not isinstance(changes.calm_mode, _Unset):
+    if not isinstance(changes.calm_mode, Unset):
         user.calm_mode = changes.calm_mode
     for name, target in changes.targets.items():
         if target is not None:

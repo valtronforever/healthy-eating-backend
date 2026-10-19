@@ -11,6 +11,11 @@ from healthy_eating.db.models import Meal
 from healthy_eating.mcp_server.context import current_user_id
 from healthy_eating.nutrition.types import Confidence, MealSource, NutrientField
 from healthy_eating.services.meals import (
+    MAX_CALORIES_KCAL,
+    MAX_DESCRIPTION_LENGTH,
+    MAX_DISH_NAME_LENGTH,
+    MAX_MACRONUTRIENT_G,
+    MAX_PORTION_GRAMS,
     MealEstimate,
     MealNotFoundError,
     evaluate_meal,
@@ -152,7 +157,9 @@ def register(mcp: FastMCP, db: Database) -> None:
         dish_name: Annotated[
             str,
             Field(
-                min_length=1, max_length=200, description="Name of the dish, e.g. 'Caesar salad'"
+                min_length=1,
+                max_length=MAX_DISH_NAME_LENGTH,
+                description="Name of the dish, e.g. 'Caesar salad'",
             ),
         ],
         source: Annotated[
@@ -191,25 +198,30 @@ def register(mcp: FastMCP, db: Database) -> None:
         description: Annotated[
             str | None,
             Field(
-                max_length=1000,
+                max_length=MAX_DESCRIPTION_LENGTH,
                 description="Visible or stated ingredients, cooking method, portion notes",
             ),
         ] = None,
         portion_grams: Annotated[
-            float | None, Field(gt=0, le=5000, description="Portion weight in grams")
+            float | None, Field(gt=0, le=MAX_PORTION_GRAMS, description="Portion weight in grams")
         ] = None,
         calories_kcal: Annotated[
-            float | None, Field(ge=0, le=10000, description="Energy of the whole portion, kcal")
+            float | None,
+            Field(ge=0, le=MAX_CALORIES_KCAL, description="Energy of the whole portion, kcal"),
         ] = None,
         protein_g: Annotated[
-            float | None, Field(ge=0, le=1000, description="Protein in the whole portion, g")
+            float | None,
+            Field(ge=0, le=MAX_MACRONUTRIENT_G, description="Protein in the whole portion, g"),
         ] = None,
         fat_g: Annotated[
-            float | None, Field(ge=0, le=1000, description="Fat in the whole portion, g")
+            float | None,
+            Field(ge=0, le=MAX_MACRONUTRIENT_G, description="Fat in the whole portion, g"),
         ] = None,
         carbohydrates_g: Annotated[
             float | None,
-            Field(ge=0, le=1000, description="Carbohydrates in the whole portion, g"),
+            Field(
+                ge=0, le=MAX_MACRONUTRIENT_G, description="Carbohydrates in the whole portion, g"
+            ),
         ] = None,
         eaten_at: Annotated[
             datetime | None,

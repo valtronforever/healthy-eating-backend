@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from healthy_eating.api.deps import CurrentUserId, SessionDep
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, EnergyUnit, NutrientField
 from healthy_eating.services.settings import (
-    UNSET,
     InvalidSettingsError,
     SettingsChanges,
     TargetRange,
@@ -15,6 +14,7 @@ from healthy_eating.services.settings import (
     update_settings,
     validate_time_zone,
 )
+from healthy_eating.services.unset import UNSET
 
 router = APIRouter(tags=["account"])
 

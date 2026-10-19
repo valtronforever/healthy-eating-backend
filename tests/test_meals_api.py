@@ -220,3 +220,132 @@ async def test_users_cannot_delete_other_users_meals(
     assert response.status_code == 404
     assert (await http.get(f"/api/v1/meals/{meal_id}", headers=kim.headers)).status_code == 200
     assert (await http.delete(f"/api/v1/meals/{meal_id}")).status_code == 401
+
+
+# Correct
+
+
+async def edit(
+    http: httpx.AsyncClient, owner: Account, meal_id: uuid.UUID, body: dict[str, Any]
+) -> httpx.Response:
+    return await http.patch(f"/api/v1/meals/{meal_id}", json=body, headers=owner.headers)
+
+
+async def test_edited_values_are_no_longer_estimated(
+    app: FastAPI, http: httpx.AsyncClient, kim: Account
+) -> None:
+    meal_id = await add_meal(app, kim, "2026-10-18T16:00:00+00:00")
+
+    response = await edit(http, kim, meal_id, {"protein_g": 9, "carbohydrates_g": 31})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    meal = body["meal"]
+    assert meal["id"] == str(meal_id)
+    assert (meal["calories_kcal"], meal["protein_g"], meal["fat_g"]) == (200, 9, 4)
+    assert meal["carbohydrates_g"] == 31
+    assert meal["estimated_fields"] == ["calories_kcal", "fat_g"]
+    assert meal["source"] == "estimated_by_assistant"
+    assert body["warnings"] == []
+    stored = (await http.get(f"/api/v1/meals/{meal_id}", headers=kim.headers)).json()
+    assert stored == meal
+
+
+async def test_unchanged_values_keep_their_estimated_mark(
+    app: FastAPI, http: httpx.AsyncClient, kim: Account
+) -> None:
+    meal_id = await add_meal(app, kim, "2026-10-18T16:00:00+00:00")
+    # An edit form sends every field, also the ones the user did not touch.
+    response = await edit(
+        http,
+        kim,
+        meal_id,
+        {"dish_name": "Toast", "calories_kcal": 200, "protein_g": 6, "fat_g": 4},
+    )
+    assert response.json()["meal"]["estimated_fields"] == [
+        "calories_kcal",
+        "protein_g",
+        "fat_g",
+        "carbohydrates_g",
+    ]
+
+
+async def test_edit_name_portion_and_time(
+    app: FastAPI, http: httpx.AsyncClient, kim: Account
+) -> None:
+    meal_id = await add_meal(app, kim, "2026-10-18T16:00:00+00:00")
+
+    response = await edit(
+        http,
+        kim,
+        meal_id,
+        {"dish_name": "Rye toast", "portion_grams": 80, "eaten_at": "2026-10-17T23:30:00+09:00"},
+    )
+    meal = response.json()["meal"]
+    assert meal["dish_name"] == "Rye toast"
+    assert meal["portion_grams"] == 80
+    assert meal["eaten_at"] == "2026-10-17T23:30:00+09:00"
+    assert meal["local_date"] == "2026-10-17"
+    assert len(meal["estimated_fields"]) == 4
+
+    # A time without an offset is read in the user's time zone (Los Angeles); null removes the
+    # portion weight.
+    response = await edit(
+        http, kim, meal_id, {"portion_grams": None, "eaten_at": "2026-10-18T07:15:00"}
+    )
+    meal = response.json()["meal"]
+    assert meal["portion_grams"] is None
+    assert meal["eaten_at"] == "2026-10-18T07:15:00-07:00"
+
+
+async def test_edit_reports_calories_that_do_not_match_the_macros(
+    app: FastAPI, http: httpx.AsyncClient, kim: Account
+) -> None:
+    meal_id = await add_meal(app, kim, "2026-10-18T16:00:00+00:00")
+    response = await edit(http, kim, meal_id, {"calories_kcal": 600})
+    assert response.status_code == 200
+    assert len(response.json()["warnings"]) == 1
+    assert response.json()["meal"]["calories_kcal"] == 600
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"calories_kcal": None},
+        {"protein_g": -1},
+        {"fat_g": 1001},
+        {"portion_grams": 0},
+        {"dish_name": ""},
+        {"dish_name": None},
+        {"eaten_at": None},
+        {"eaten_at": "yesterday"},
+        {"source": "from_conversation"},
+        {"estimated_fields": []},
+    ],
+)
+async def test_invalid_edits_are_rejected(
+    app: FastAPI, http: httpx.AsyncClient, kim: Account, body: dict[str, Any]
+) -> None:
+    meal_id = await add_meal(app, kim, "2026-10-18T16:00:00+00:00")
+    before = (await http.get(f"/api/v1/meals/{meal_id}", headers=kim.headers)).json()
+
+    response = await edit(http, kim, meal_id, body)
+
+    assert response.status_code == 422
+    after = (await http.get(f"/api/v1/meals/{meal_id}", headers=kim.headers)).json()
+    assert after == before
+
+
+async def test_users_cannot_edit_other_users_meals(
+    app: FastAPI, http: httpx.AsyncClient, kim: Account
+) -> None:
+    mallory = await account(http, "mallory@example.com")
+    meal_id = await add_meal(app, kim, "2026-10-18T16:00:00+00:00")
+
+    response = await edit(http, mallory, meal_id, {"calories_kcal": 1})
+    assert response.status_code == 404
+    assert (await edit(http, kim, uuid.uuid4(), {"calories_kcal": 1})).status_code == 404
+    unauthenticated = await http.patch(f"/api/v1/meals/{meal_id}", json={"calories_kcal": 1})
+    assert unauthenticated.status_code == 401
+    meal = (await http.get(f"/api/v1/meals/{meal_id}", headers=kim.headers)).json()
+    assert meal["calories_kcal"] == 200

@@ -2,20 +2,27 @@ import base64
 import binascii
 import uuid
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Self
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
 from healthy_eating.nutrition.types import Confidence, MealSource, NutrientField
 from healthy_eating.services.meals import (
+    MAX_CALORIES_KCAL,
+    MAX_DISH_NAME_LENGTH,
+    MAX_MACRONUTRIENT_G,
+    MAX_PORTION_GRAMS,
     LocalMeal,
     MealCursor,
+    MealEdit,
     delete_meal,
+    edit_meal,
     get_meal,
     list_meals,
 )
+from healthy_eating.services.unset import UNSET
 
 router = APIRouter(tags=["meals"])
 
@@ -55,6 +62,43 @@ class MealListResponse(BaseModel):
     meals: list[MealResponse] = Field(description="Newest first")
     next_cursor: str | None = Field(
         description="Pass as `cursor` to get the next page; null on the last page"
+    )
+
+
+class MealUpdate(BaseModel):
+    """Only the fields present are changed; only portion_grams may be null (removes it).
+
+    Changed nutrition values become the user's own and lose their "estimated" mark.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    dish_name: str | None = Field(default=None, min_length=1, max_length=MAX_DISH_NAME_LENGTH)
+    portion_grams: float | None = Field(default=None, gt=0, le=MAX_PORTION_GRAMS)
+    calories_kcal: float | None = Field(default=None, ge=0, le=MAX_CALORIES_KCAL)
+    protein_g: float | None = Field(default=None, ge=0, le=MAX_MACRONUTRIENT_G)
+    fat_g: float | None = Field(default=None, ge=0, le=MAX_MACRONUTRIENT_G)
+    carbohydrates_g: float | None = Field(default=None, ge=0, le=MAX_MACRONUTRIENT_G)
+    eaten_at: datetime | None = Field(
+        default=None, description="ISO 8601; without an offset it is read in the user's time zone"
+    )
+
+    @model_validator(mode="after")
+    def _check_not_null(self) -> Self:
+        for name in self.model_fields_set - {"portion_grams"}:
+            if getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be null")
+        return self
+
+    def to_edit(self) -> MealEdit:
+        given = {name: getattr(self, name) for name in self.model_fields_set}
+        return MealEdit(**{name: given.get(name, UNSET) for name in type(self).model_fields})
+
+
+class MealUpdateResponse(BaseModel):
+    meal: MealResponse
+    warnings: list[str] = Field(
+        description="Possible problems with the values, e.g. calories that do not match the macros"
     )
 
 
@@ -135,6 +179,17 @@ async def read_meal(
     if meal is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Meal not found")
     return _meal_response(meal)
+
+
+@router.patch("/meals/{meal_id}")
+async def update_meal(
+    meal_id: uuid.UUID, update: MealUpdate, user_id: CurrentUserId, session: SessionDep
+) -> MealUpdateResponse:
+    """Correct one of the signed-in user's meals in place (same meal id)."""
+    edited = await edit_meal(session, user_id, meal_id, update.to_edit())
+    if edited is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Meal not found")
+    return MealUpdateResponse(meal=_meal_response(edited.meal), warnings=edited.warnings)
 
 
 @router.delete("/meals/{meal_id}", status_code=status.HTTP_204_NO_CONTENT)
