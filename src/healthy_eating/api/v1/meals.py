@@ -4,12 +4,18 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
 from healthy_eating.nutrition.types import Confidence, MealSource, NutrientField
-from healthy_eating.services.meals import LocalMeal, MealCursor, get_meal, list_meals
+from healthy_eating.services.meals import (
+    LocalMeal,
+    MealCursor,
+    delete_meal,
+    get_meal,
+    list_meals,
+)
 
 router = APIRouter(tags=["meals"])
 
@@ -129,3 +135,11 @@ async def read_meal(
     if meal is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Meal not found")
     return _meal_response(meal)
+
+
+@router.delete("/meals/{meal_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_meal(meal_id: uuid.UUID, user_id: CurrentUserId, session: SessionDep) -> Response:
+    """Delete one of the signed-in user's meals."""
+    if not await delete_meal(session, user_id, meal_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Meal not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

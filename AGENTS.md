@@ -11,7 +11,7 @@ Healthy Eating is an open-source (MIT), self-hostable app for tracking nutrition
 
 The LLM in the user's MCP client (Claude, ChatGPT, etc.) recognizes the food and estimates portions. The backend does **not** call an LLM. Its tools accept structured input (food items + amounts), look up nutrient data, compute totals and persist them.
 
-Status: early v1. Implemented: OAuth 2.1 server with social and dev login, MCP endpoint with `get_profile`, `set_timezone` and `log_meal` (meals stored in the `meals` table) tools, REST `/api/v1/me`, `/api/v1/me/settings` and `/api/v1/meals`, Docker dev stack, tests. Statistics (daily summary, trends) are next. Keep this file in sync when the layout or commands change.
+Status: early v1. Implemented: OAuth 2.1 server with social and dev login, MCP endpoint with `get_profile`, `set_timezone` and `log_meal` (meals stored in the `meals` table) tools, REST `/api/v1/me`, `/api/v1/me/settings` and `/api/v1/meals` (list, get, delete), Docker dev stack, tests. Statistics (daily summary, trends) are next. Keep this file in sync when the layout or commands change.
 
 ## Hard constraints
 

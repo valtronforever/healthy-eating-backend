@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 
-from sqlalchemy import select, tuple_
+from sqlalchemy import delete, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from healthy_eating.db.base import utcnow
@@ -272,3 +272,11 @@ async def get_meal(
     if meal is None:
         return None
     return _local(meal, await get_time_zone(session, user_id))
+
+
+async def delete_meal(session: AsyncSession, user_id: uuid.UUID, meal_id: uuid.UUID) -> bool:
+    """Delete one of the user's meals. False if it does not exist or belongs to someone else."""
+    deleted = await session.scalar(
+        delete(Meal).where(Meal.id == meal_id, Meal.user_id == user_id).returning(Meal.id)
+    )
+    return deleted is not None

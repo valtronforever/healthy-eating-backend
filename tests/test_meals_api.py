@@ -189,3 +189,34 @@ async def test_users_only_see_their_own_meals(
     assert response.status_code == 404
     response = await http.get(f"/api/v1/meals/{uuid.uuid4()}", headers=kim.headers)
     assert response.status_code == 404
+
+
+# Delete
+
+
+async def test_delete_removes_the_meal(app: FastAPI, http: httpx.AsyncClient, kim: Account) -> None:
+    meal_id = await add_meal(app, kim, "2026-10-18T16:00:00+00:00")
+    kept = await add_meal(app, kim, "2026-10-18T17:00:00+00:00", dish_name="Kept")
+
+    response = await http.delete(f"/api/v1/meals/{meal_id}", headers=kim.headers)
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert (await http.get(f"/api/v1/meals/{meal_id}", headers=kim.headers)).status_code == 404
+    assert await day(http, kim, "2026-10-18") == ["Kept"]
+    again = await http.delete(f"/api/v1/meals/{meal_id}", headers=kim.headers)
+    assert again.status_code == 404
+    assert (await http.get(f"/api/v1/meals/{kept}", headers=kim.headers)).status_code == 200
+
+
+async def test_users_cannot_delete_other_users_meals(
+    app: FastAPI, http: httpx.AsyncClient, kim: Account
+) -> None:
+    mallory = await account(http, "mallory@example.com")
+    meal_id = await add_meal(app, kim, "2026-10-18T16:00:00+00:00")
+
+    response = await http.delete(f"/api/v1/meals/{meal_id}", headers=mallory.headers)
+
+    assert response.status_code == 404
+    assert (await http.get(f"/api/v1/meals/{meal_id}", headers=kim.headers)).status_code == 200
+    assert (await http.delete(f"/api/v1/meals/{meal_id}")).status_code == 401
