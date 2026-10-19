@@ -45,7 +45,7 @@ npx @modelcontextprotocol/inspector
 
 The client registers itself and opens the login page in your browser. With `DEV_LOGIN_ENABLED=true` (the default in `.env.example`) you can sign in with any email address, no social provider needed. Then call the `get_profile` tool.
 
-Claude.ai and ChatGPT only connect to a public `https` URL, so use a server set up as in [docs/self-hosting.md](docs/self-hosting.md#5-connect), which also has the steps for each assistant. ChatGPT adds custom MCP servers only on chatgpt.com (Plugins › + › Add custom MCP server), not in its apps.
+Claude.ai and ChatGPT only connect to a public `https` URL, so use a server set up as in [docs/self-hosting.md](docs/self-hosting.md#5-connect), which also has the steps for each assistant. ChatGPT adds custom MCP servers only on chatgpt.com on a computer (Plugins › Add › Add custom MCP server), not in its apps or on the mobile website.
 
 ## Development on the host
 

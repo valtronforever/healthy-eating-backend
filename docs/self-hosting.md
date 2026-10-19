@@ -102,10 +102,13 @@ Check it from outside: `https://food.example.com/health` and
   assistant opens your server's login page; sign in with a social account (the account is
   created on first sign-in).
   - **Claude:** Settings › Connectors › Add custom connector, paste the URL.
-  - **ChatGPT:** only on the ChatGPT website (chatgpt.com), not in the ChatGPT apps. Open
-    Plugins, select +, then **Add custom MCP server**; enter a name and the URL, review the risk
-    warning, select **I understand and want to continue** and **Create as a plugin**. Install
-    the plugin, start a new chat, type `@` and choose it. Saving meals works with a personal
+  - **ChatGPT:** only on the ChatGPT website on a computer. The ChatGPT apps and the mobile
+    website don't offer it, and no link or command adds a server from a phone. Open
+    [chatgpt.com/plugins](https://chatgpt.com/plugins), select **Add**, then **Add custom MCP
+    server**; enter a name and the URL, keep **OAuth**, review the risk warning, select **I
+    understand and want to continue** and **Create as a plugin**. Install the plugin, start a
+    new chat, type `@` and choose it. After that it also works in the ChatGPT apps. The iOS
+    app's **Share setup link** sends these steps with the URL to another device. Saving meals works with a personal
     ChatGPT Pro plan. In a Business, Enterprise or Edu workspace an admin must allow custom MCP
     servers (permission **Create plugins with MCPs**). See OpenAI's
     [Connecting custom MCP servers in ChatGPT](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt).
