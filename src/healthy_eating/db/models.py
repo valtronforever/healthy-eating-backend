@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint
@@ -12,9 +12,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from healthy_eating.db.base import Base, TimestampMixin
 from healthy_eating.nutrition.types import (
     CONFIDENCE_VALUES,
+    DAY_STATUSES,
     ENERGY_UNITS,
     MEAL_SOURCES,
     NUTRIENT_FIELDS,
+    STATUS_SETTERS,
 )
 
 
@@ -201,3 +203,20 @@ class Meal(TimestampMixin, Base):
     # Values the assistant estimated, as opposed to values from the user's own workflow.
     estimated_fields: Mapped[list[str]] = mapped_column(ARRAY(Text))
     confidence: Mapped[str] = mapped_column(String(8))
+
+
+class DayStatusRecord(TimestampMixin, Base):
+    """Whether the user logged every meal of a local day (see services/days.py)."""
+
+    __tablename__ = "day_statuses"
+    __table_args__ = (
+        CheckConstraint(_one_of("status", DAY_STATUSES), name="status"),
+        CheckConstraint(_one_of("set_by", STATUS_SETTERS), name="set_by"),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    local_date: Mapped[date] = mapped_column(primary_key=True)
+    status: Mapped[str] = mapped_column(String(8))
+    set_by: Mapped[str] = mapped_column(String(9))

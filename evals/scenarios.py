@@ -359,6 +359,31 @@ async def time_zone(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> 
     _require_confirmation(env, checks, turn.reply)
 
 
+async def day_complete(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    turn = await env.chat(
+        CHAT.name,
+        "Dinner was a bowl of lentil soup, I worked it out: 380 kcal, 22 g protein, "
+        "6 g fat, 58 g carbs. That's all I'm eating today, I'm done for the day.",
+    )
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    meals = await env.meals()
+    checks.require("exactly one meal saved", len(meals) == 1, _describe_meals(meals))
+    statuses = await env.day_statuses()
+    checks.require(
+        "today marked complete by the assistant",
+        [(s.status, s.set_by) for s in statuses] == [("complete", "assistant")],
+        str([(s.local_date, s.status, s.set_by) for s in statuses]),
+    )
+    checks.require(
+        "does not ask whether the day is complete",
+        not re.search(r"(is|was) (that|this) (all|everything)\?", turn.reply, re.IGNORECASE),
+        turn.reply[-300:],
+    )
+    _require_confirmation(env, checks, turn.reply)
+
+
 async def correction(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
     first = await env.chat(
         CHAT.name,
@@ -461,6 +486,11 @@ SCENARIOS = [
         "time_zone",
         "The user says where they live: the time zone is stored and the meal saved",
         time_zone,
+    ),
+    Scenario(
+        "day_complete",
+        "The user says they are done for the day: meal saved and today marked complete",
+        day_complete,
     ),
     Scenario("server_error", "When saving fails, the user is told it was not saved", server_error),
     Scenario("not_food", "A food question that is not a meal logs nothing", not_food),

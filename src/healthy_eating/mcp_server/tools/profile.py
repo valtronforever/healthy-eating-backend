@@ -19,9 +19,11 @@ from healthy_eating.services.users import get_user
 SET_TIMEZONE_DESCRIPTION = """\
 Store the user's time zone in HealthyEating, so meals count for the right day and times
 without a UTC offset are read correctly.
-Call it when the user says where they are or which time zone they are in, or when you
-know it from your context and get_profile shows a different or no time zone. Never ask
-the user for their time zone just for HealthyEating.
+Call it when the user says where they live or which time zone they are in (for example
+"I live in Berlin"), also in the same turn as log_meal and even if you already gave the meal
+the right UTC offset. Also call it when you know the time zone from your context and
+get_profile shows a different or no time zone. Never ask the user for their time zone just
+for HealthyEating.
 """
 
 

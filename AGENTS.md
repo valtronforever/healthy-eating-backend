@@ -11,7 +11,7 @@ Healthy Eating is an open-source (MIT), self-hostable app for tracking nutrition
 
 The LLM in the user's MCP client (Claude, ChatGPT, etc.) recognizes the food and estimates portions. The backend does **not** call an LLM. Its tools accept structured input (food items + amounts), look up nutrient data, compute totals and persist them.
 
-Status: early v1. Implemented: OAuth 2.1 server with social and dev login, MCP endpoint with `get_profile`, `set_timezone` and `log_meal` (meals stored in the `meals` table) tools, REST `/api/v1/me`, `/api/v1/me/settings` and `/api/v1/meals` (list, get, correct, delete), Docker dev stack, tests. Statistics (daily summary, trends) are next. Keep this file in sync when the layout or commands change.
+Status: early v1. Implemented: OAuth 2.1 server with social and dev login, MCP endpoint with `get_profile`, `set_timezone`, `log_meal` (meals stored in the `meals` table) and `set_day_status` tools, REST `/api/v1/me`, `/api/v1/me/settings`, `/api/v1/meals` (list, get, correct, delete) and `/api/v1/days/{date}/status`, Docker dev stack, tests. Statistics (daily summary, trends) are next. Keep this file in sync when the layout or commands change.
 
 ## Hard constraints
 
@@ -125,6 +125,7 @@ Rules:
 - A logged food entry stores a **snapshot** of its computed nutrient values, so later changes to reference data never rewrite history.
 - Corrections (`replaces_meal_id`) update the existing `meals` row in place, so a meal is never counted twice. `eaten_at` is stored in UTC; `utc_offset_minutes` keeps the offset of the meal's local time: the one the user gave, otherwise the one of the user's time zone (`users.timezone`) at that moment, or NULL when neither is known. A time sent without an offset is read in the user's time zone, or stored as UTC with the offset unknown when no time zone is set.
 - Corrections from the app (`PATCH /api/v1/meals/{id}`) update the same row through `services/meals.py:edit_meal`. A nutrition value the user changes is no longer estimated; a value sent unchanged keeps its mark. Input limits (`MAX_*` in `services/meals.py`) are shared by `log_meal` and the REST API.
+- Day completeness (`services/days.py`): a local day can be marked `complete` or `partial` by the user (app) or the assistant (`set_day_status`). Averages count only complete days with meals once the user has marked any day complete; otherwise every day with meals except partial ones. Days without meals never count. Use `day_counts()` for every average.
 - A meal's local day uses its stored offset first, then the user's current time zone, then UTC (`services/local_time.py`). Use these helpers for every per-day query so the REST API and MCP tools agree.
 - Store timestamps in UTC plus the user's IANA timezone. Daily aggregates are computed in the user's local day.
 - Nutrient reference data must come from open sources with compatible licenses (e.g. USDA FoodData Central: public domain; Open Food Facts: ODbL, so attribute and keep it as a separate database, not mixed into our code).

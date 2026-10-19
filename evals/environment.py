@@ -39,7 +39,7 @@ from evals.proxy import McpProxy
 from healthy_eating.auth.tokens import generate_token, hash_token
 from healthy_eating.db import Base, Database
 from healthy_eating.db.base import utcnow
-from healthy_eating.db.models import AccessTokenRecord, Meal, OAuthClient, User
+from healthy_eating.db.models import AccessTokenRecord, DayStatusRecord, Meal, OAuthClient, User
 
 EVALS_DIR = Path(__file__).resolve().parent
 FIXTURES_DIR = EVALS_DIR / "fixtures"
@@ -159,6 +159,7 @@ class EvalEnvironment:
         async with self.db.session() as session:
             await session.execute(text("DELETE FROM meals"))
             await session.execute(text("UPDATE users SET timezone = NULL"))
+            await session.execute(text("DELETE FROM day_statuses"))
         self.sheets_log.unlink(missing_ok=True)
         assert self.proxy is not None
         self.proxy.reset()
@@ -227,6 +228,11 @@ class EvalEnvironment:
                 select(User.timezone).where(User.id == self.user_id)
             )
             return time_zone
+
+    async def day_statuses(self) -> list[DayStatusRecord]:
+        async with self.db.session() as session:
+            rows = await session.scalars(select(DayStatusRecord))
+            return list(rows)
 
     def sheet_rows(self) -> list[dict[str, Any]]:
         if not self.sheets_log.exists():

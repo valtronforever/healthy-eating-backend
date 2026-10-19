@@ -17,3 +17,9 @@ NUTRIENT_FIELDS: tuple[NutrientField, ...] = get_args(NutrientField)
 # Unit the user wants energy shown in. Energy is always stored in kcal.
 EnergyUnit = Literal["kcal", "kj"]
 ENERGY_UNITS: tuple[EnergyUnit, ...] = get_args(EnergyUnit)
+
+# Whether all meals of a local day were logged. Set by the user (app) or the assistant (MCP).
+DayStatus = Literal["complete", "partial"]
+DAY_STATUSES: tuple[DayStatus, ...] = get_args(DayStatus)
+StatusSetter = Literal["user", "assistant"]
+STATUS_SETTERS: tuple[StatusSetter, ...] = get_args(StatusSetter)

@@ -2,7 +2,7 @@ from fastmcp import FastMCP
 
 from healthy_eating.auth.provider import PostgresOAuthProvider
 from healthy_eating.db import Database
-from healthy_eating.mcp_server.tools import meals, profile
+from healthy_eating.mcp_server.tools import days, meals, profile
 
 INSTRUCTIONS = """\
 Healthy Eating keeps the user's nutrition log on their own server.
@@ -17,6 +17,9 @@ even when something is unclear; ask about it as a short follow-up after your nor
 and update the same meal if the answer changes it.
 After every `log_meal` call, tell the user in one short line whether the meal was saved to
 HealthyEating.
+When the user says where they live or which time zone they are in, also call
+`set_timezone`, even if you already gave the meal the right UTC offset: Healthy Eating needs
+the time zone to count meals on the right day.
 All nutrient values use canonical units: energy in kcal, macronutrients in g, minerals
 in mg, trace elements and most vitamins in µg.
 The user can review statistics and progress in the Healthy Eating iOS app by signing
@@ -28,4 +31,5 @@ def create_mcp_server(provider: PostgresOAuthProvider, db: Database) -> FastMCP:
     mcp = FastMCP(name="Healthy Eating", instructions=INSTRUCTIONS, auth=provider)
     profile.register(mcp, db)
     meals.register(mcp, db)
+    days.register(mcp, db)
     return mcp

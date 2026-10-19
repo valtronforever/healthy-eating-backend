@@ -28,7 +28,8 @@ replies, tool calls, stored values) and the app and opencode logs.
 
 Options: `--model` (or `EVAL_MODEL`), `--runs`, `--only`, `--database-url` (or
 `EVAL_DATABASE_URL`, default `healthy_eating_eval` on the local Postgres; **it is dropped
-and recreated on every run**), `--opencode` (binary), `--turn-timeout`.
+and recreated on every run**). Never start a second run while one is still going: both use the same database, and the
+second run's reset breaks the first (seen as a failed run and an opencode warm-up that hangs), `--opencode` (binary), `--turn-timeout`.
 
 ## How it works
 
@@ -63,6 +64,7 @@ and recreated on every run**), `--opencode` (binary), `--turn-timeout`.
 | `earlier_meal` | "Yesterday evening I had ...": saved with the user's numbers, dated yesterday (not "now"), and the user is never asked for a UTC offset or time zone |
 | `server_error` | Tool calls fail (proxy returns 503): nothing saved, the user is told it was not saved, no false "saved" claim |
 | `time_zone` | "I live in Berlin. Breakfast this morning at 8 ...": `set_timezone` stores `Europe/Berlin`, one meal saved with the user's numbers, no question about the time zone (notes: called before `log_meal`, stored at 08:00 Berlin time) |
+| `day_complete` | Meal with numbers plus "That's all I'm eating today": one meal saved and today marked complete by the assistant, without asking |
 | `not_food` | A nutrition question that is not a meal logs nothing |
 
 Checks are either required (decide pass or fail) or notes (reported only), for example
