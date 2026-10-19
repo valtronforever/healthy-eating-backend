@@ -33,7 +33,13 @@ def register(mcp: FastMCP, db: Database) -> None:
     @mcp.tool(
         name="set_day_status",
         description=SET_DAY_STATUS_DESCRIPTION,
-        annotations={"title": "Mark a day", "readOnlyHint": False, "idempotentHint": True},
+        annotations={
+            "title": "Mark a day",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     )
     async def set_day_status_tool(
         status: Annotated[

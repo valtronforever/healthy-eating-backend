@@ -152,7 +152,13 @@ def _saved_meal(row: Meal) -> SavedMeal:
 def register(mcp: FastMCP, db: Database) -> None:
     @mcp.tool(
         description=LOG_MEAL_DESCRIPTION,
-        annotations={"title": "Save a meal", "readOnlyHint": False, "idempotentHint": False},
+        annotations={
+            "title": "Save a meal",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": False,
+        },
     )
     async def log_meal(
         dish_name: Annotated[

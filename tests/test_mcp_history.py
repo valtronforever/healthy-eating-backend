@@ -32,7 +32,7 @@ async def call(
         return await mcp.call_tool(tool, arguments or {}, raise_on_error=False)
 
 
-async def test_read_tools_are_annotated(app: FastAPI, kim: Account) -> None:
+async def test_tools_are_annotated(app: FastAPI, kim: Account) -> None:
     async with mcp_client(app, kim.token) as mcp:
         tools = {tool.name: tool for tool in await mcp.list_tools()}
     for name in ("list_meals", "get_daily_summary"):
@@ -42,6 +42,16 @@ async def test_read_tools_are_annotated(app: FastAPI, kim: Account) -> None:
     delete = tools["delete_meal"].annotations
     assert delete is not None
     assert delete.destructive_hint is True
+    for name in ("log_meal", "set_day_status", "set_timezone"):
+        annotations = tools[name].annotations
+        assert annotations is not None
+        assert annotations.read_only_hint is False
+        # They only add or change the user's own data; MCP defaults would say destructive.
+        assert annotations.destructive_hint is False
+    # Every tool works only with the user's own Healthy Eating server.
+    for tool in tools.values():
+        assert tool.annotations is not None
+        assert tool.annotations.open_world_hint is False
 
 
 async def test_list_meals_defaults_to_today(app: FastAPI, kim: Account) -> None:

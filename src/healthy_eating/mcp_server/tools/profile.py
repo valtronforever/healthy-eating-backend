@@ -59,7 +59,7 @@ class SetTimezoneResult(BaseModel):
 
 
 def register(mcp: FastMCP, db: Database) -> None:
-    @mcp.tool(annotations={"readOnlyHint": True})
+    @mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": False})
     async def get_profile() -> Profile:
         """Return the signed-in user's Healthy Eating profile and settings."""
         user_id = current_user_id()
@@ -82,7 +82,13 @@ def register(mcp: FastMCP, db: Database) -> None:
 
     @mcp.tool(
         description=SET_TIMEZONE_DESCRIPTION,
-        annotations={"title": "Set time zone", "readOnlyHint": False, "idempotentHint": True},
+        annotations={
+            "title": "Set time zone",
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     )
     async def set_timezone(
         timezone: Annotated[

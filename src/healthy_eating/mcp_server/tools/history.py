@@ -120,7 +120,7 @@ def register(mcp: FastMCP, db: Database) -> None:
     @mcp.tool(
         name="list_meals",
         description=LIST_MEALS_DESCRIPTION,
-        annotations={"title": "List saved meals", "readOnlyHint": True},
+        annotations={"title": "List saved meals", "readOnlyHint": True, "openWorldHint": False},
     )
     async def list_meals_tool(first_day: FirstDay = None, last_day: LastDay = None) -> MealList:
         user_id = current_user_id()
@@ -155,7 +155,7 @@ def register(mcp: FastMCP, db: Database) -> None:
     @mcp.tool(
         name="get_daily_summary",
         description=GET_DAILY_SUMMARY_DESCRIPTION,
-        annotations={"title": "Daily totals", "readOnlyHint": True},
+        annotations={"title": "Daily totals", "readOnlyHint": True, "openWorldHint": False},
     )
     async def get_daily_summary(
         first_day: FirstDay = None, last_day: LastDay = None
@@ -187,7 +187,12 @@ def register(mcp: FastMCP, db: Database) -> None:
     @mcp.tool(
         name="delete_meal",
         description=DELETE_MEAL_DESCRIPTION,
-        annotations={"title": "Delete a meal", "readOnlyHint": False, "destructiveHint": True},
+        annotations={
+            "title": "Delete a meal",
+            "readOnlyHint": False,
+            "destructiveHint": True,
+            "openWorldHint": False,
+        },
     )
     async def delete_meal_tool(
         meal_id: Annotated[uuid.UUID, Field(description="meal_id of the meal to delete")],
