@@ -1,4 +1,5 @@
 import logging
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -210,6 +211,42 @@ async def test_log_meal_does_not_log_meal_contents(
     # Ignore the test's own MCP client, which logs what it sends.
     server_records = [r for r in caplog.records if not r.name.startswith("mcp.client")]
     assert not [r for r in server_records if "Caesar" in r.getMessage()]
+    # The request is still timed, by tool name only.
+    assert [r for r in server_records if r.getMessage().startswith("MCP tools/call log_meal: ok")]
+
+
+async def test_timing_log_follows_the_connection(
+    mcp: Client[StreamableHttpTransport], caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.INFO):
+        async with mcp:
+            await mcp.call_tool("log_meal", COMPLETE_MEAL)
+            await mcp.call_tool("get_profile", {})
+    lines = [r.getMessage() for r in caplog.records if r.name == "healthy_eating.mcp"]
+    calls = [line for line in lines if line.startswith("MCP tools/call")]
+    assert len(calls) == 2
+    # The test client speaks the stateless MCP version, so requests are counted per client.
+    counts = [re.search(r"no session request (\d+)", line) for line in calls]
+    assert counts[0] is not None and counts[1] is not None
+    assert int(counts[1].group(1)) > int(counts[0].group(1))
+    assert "s after the previous" in calls[1]
+    assert all("client Claude " in line for line in calls)
+
+
+async def test_failed_tool_call_logs_no_error_message(
+    mcp: Client[StreamableHttpTransport], caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.INFO):
+        async with mcp:
+            result = await mcp.call_tool(
+                "log_meal",
+                {**COMPLETE_MEAL, "replaces_meal_id": str(uuid.uuid4())},
+                raise_on_error=False,
+            )
+    assert result.is_error
+    [timing] = [r.getMessage() for r in caplog.records if "MCP tools/call" in r.getMessage()]
+    assert timing.startswith("MCP tools/call log_meal: error ToolError in ")
+    assert "replaces_meal_id" not in timing
 
 
 async def test_log_meal_asks_to_complete_existing_calculation(

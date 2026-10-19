@@ -144,3 +144,13 @@ async def revoke_connection(
         return False
     await revoke_grant(session, grant_id, now=now)
     return True
+
+
+async def get_client_name(session: AsyncSession, client_id: str) -> str | None:
+    """The name a client registered with, e.g. "ChatGPT"; None if it gave none."""
+    name = await session.scalar(
+        select(OAuthClient.client_info["client_name"].astext).where(
+            OAuthClient.client_id == client_id
+        )
+    )
+    return name

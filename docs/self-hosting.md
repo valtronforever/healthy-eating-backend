@@ -166,4 +166,5 @@ its settings.
 | `database` not ok in `/health` | Postgres container status; `POSTGRES_PASSWORD` changed after the first start |
 | Assistant cannot connect | `BASE_URL` must be exactly the public `https` URL; the proxy must forward `/mcp` and `/.well-known/*` without buffering |
 | Login page shows no providers | All variables of a provider must be set; restart after changing `.env.production` |
+| Saving a meal feels slow | The app logs every MCP request, for example `MCP tools/call log_meal: ok in 6.1 ms (session be30b0dc request 3, 14.2 s after the previous, 20.5 s in, client ChatGPT b4341645)`. Server time is usually a few milliseconds. The gap after the previous request in the same session is time spent in the assistant (the model thinking, the user confirming the action). Clients on the stateless MCP version send no session; their requests are counted per client (`no session request N`) |
 | Provider says redirect URI mismatch | Register `{BASE_URL}/auth/callback/<provider>` exactly |

@@ -2,6 +2,7 @@ from fastmcp import FastMCP
 
 from healthy_eating.auth.provider import PostgresOAuthProvider
 from healthy_eating.db import Database
+from healthy_eating.mcp_server.timing import RequestTimingMiddleware
 from healthy_eating.mcp_server.tools import days, history, meals, profile
 
 INSTRUCTIONS = """\
@@ -30,6 +31,7 @@ in with the same account they used to connect here.
 
 def create_mcp_server(provider: PostgresOAuthProvider, db: Database) -> FastMCP:
     mcp = FastMCP(name="Healthy Eating", instructions=INSTRUCTIONS, auth=provider)
+    mcp.add_middleware(RequestTimingMiddleware(db))
     profile.register(mcp, db)
     meals.register(mcp, db)
     days.register(mcp, db)

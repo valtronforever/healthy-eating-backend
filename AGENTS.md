@@ -50,6 +50,7 @@ src/healthy_eating/
   mcp_server/        # named so it does not shadow the `mcp` SDK package
     server.py        # FastMCP instance + instructions + tool registration
     context.py       # current_user_id() for tools
+    timing.py        # logs each MCP request: method, tool, duration, session and client (never arguments)
     tools/           # one module per tool group, each exposing register(mcp, db)
   api/
     deps.py          # SessionDep, CurrentUserId (bearer token auth)
