@@ -32,7 +32,9 @@ class DaySummary:
     protein_g: float
     fat_g: float
     carbohydrates_g: float
-    # Share of the day's calories that the assistant estimated (0 to 1); None without calories.
+    # Calories from meals whose calories the assistant estimated, and their share (0 to 1;
+    # None without calories).
+    estimated_calories_kcal: float
     estimated_calories_share: float | None
     status: DayStatus | None
     status_set_by: StatusSetter | None
@@ -117,6 +119,7 @@ async def daily_summaries(
                 protein_g=round(total.protein_g, 1),
                 fat_g=round(total.fat_g, 1),
                 carbohydrates_g=round(total.carbohydrates_g, 1),
+                estimated_calories_kcal=round(total.estimated_kcal, 1),
                 estimated_calories_share=(
                     round(total.estimated_kcal / total.calories_kcal, 3)
                     if total.calories_kcal > 0
