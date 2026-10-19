@@ -1,0 +1,56 @@
+# Production: the app and Postgres, nothing else. Put an HTTPS reverse proxy in front of it.
+# Guide: docs/self-hosting.md
+#
+#   cp .env.production.example .env.production   # then fill it in
+#   docker compose -f compose.production.yml --env-file .env.production up -d --build
+
+name: healthy-eating-prod
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: healthy
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+      POSTGRES_DB: healthy_eating
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # No published ports: only the app reaches the database.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U healthy -d healthy_eating"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build:
+      context: .
+      target: prod
+    image: healthy-eating-backend:latest
+    restart: unless-stopped
+    env_file:
+      - ${HEALTHY_EATING_ENV_FILE:-.env.production}
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://healthy:${POSTGRES_PASSWORD}@postgres:5432/healthy_eating
+    # Only on localhost: the reverse proxy forwards to it. The app trusts X-Forwarded-*
+    # headers, so never publish this port on a public interface.
+    ports:
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  postgres-data:

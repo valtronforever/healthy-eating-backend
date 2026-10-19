@@ -11,7 +11,7 @@ Healthy Eating is an open-source (MIT), self-hostable app for tracking nutrition
 
 The LLM in the user's MCP client (Claude, ChatGPT, etc.) recognizes the food and estimates portions. The backend does **not** call an LLM. Its tools accept structured input (food items + amounts), look up nutrient data, compute totals and persist them.
 
-Status: early v1. Implemented: OAuth 2.1 server with social and dev login, MCP endpoint with `get_profile`, `set_timezone`, `log_meal` (meals stored in the `meals` table), `set_day_status`, `list_meals`, `get_daily_summary` and `delete_meal` tools, REST `/api/v1/me`, `/api/v1/me/settings`, `/api/v1/meals` (list, get, correct, delete), `/api/v1/days` (daily summaries), `/api/v1/days/{date}/status`, `/api/v1/trends`, `/api/v1/integration-status` and `/api/v1/connections`, Docker dev stack, tests. The production setup is next. Keep this file in sync when the layout or commands change.
+Status: early v1. Implemented: OAuth 2.1 server with social and dev login, MCP endpoint with `get_profile`, `set_timezone`, `log_meal` (meals stored in the `meals` table), `set_day_status`, `list_meals`, `get_daily_summary` and `delete_meal` tools, REST `/api/v1/me`, `/api/v1/me/settings`, `/api/v1/meals` (list, get, correct, delete), `/api/v1/days` (daily summaries), `/api/v1/days/{date}/status`, `/api/v1/trends`, `/api/v1/integration-status` and `/api/v1/connections`, Docker dev stack, tests. Production setup: `compose.production.yml` and `docs/self-hosting.md`. Keep this file in sync when the layout or commands change.
 
 ## Hard constraints
 
@@ -63,9 +63,11 @@ migrations/          # Alembic (async), dated revision files
 docker/postgres/init # creates the test database on first start
 tests/               # pytest, real Postgres; tests/oauth_helpers.py drives the OAuth flow
 evals/               # MCP evaluation suite: real model via opencode, run on demand (evals/README.md)
-docs/                # documentation for users and self-hosters (export-format.md)
+docs/                # for users and self-hosters: self-hosting.md, export-format.md
 openapi.json         # committed snapshot of the /api/v1 contract (tests fail if it drifts)
 docker-compose.yml   # local development stack
+compose.production.yml  # production: app + Postgres behind any HTTPS proxy (docs/self-hosting.md)
+.env.production.example # template for .env.production (git-ignored, holds the secrets)
 Dockerfile           # targets: dev (reload) and prod (non-root)
 .env.example
 ```

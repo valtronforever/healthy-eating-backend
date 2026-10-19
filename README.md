@@ -144,7 +144,7 @@ The `prod` target of the [Dockerfile](Dockerfile) builds a slim image that runs 
 docker build --target prod -t healthy-eating-backend .
 ```
 
-Run it behind a TLS-terminating reverse proxy with at least `ENVIRONMENT=production`, `BASE_URL=https://…`, `SECRET_KEY` and `DATABASE_URL` set. A complete self-hosting guide (Compose file with Postgres and automatic HTTPS) will follow.
+To run your own server, follow the **[self-hosting guide](docs/self-hosting.md)**: [`compose.production.yml`](compose.production.yml) runs the app and Postgres (migrations on start, healthchecks, restart policy, a persistent volume, the app only on `127.0.0.1`) behind any HTTPS reverse proxy, configured from `.env.production` (template: [`.env.production.example`](.env.production.example)). The guide also covers social login, backups, upgrades and what data the server stores.
 
 ## Contributing
 
