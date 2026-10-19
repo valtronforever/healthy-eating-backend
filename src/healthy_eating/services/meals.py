@@ -2,9 +2,9 @@
 
 import uuid
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from healthy_eating.db.base import utcnow
@@ -15,7 +15,12 @@ from healthy_eating.nutrition.types import (
     MealSource,
     NutrientField,
 )
-from healthy_eating.services.local_time import resolve_eaten_at
+from healthy_eating.services.local_time import (
+    local_date_column,
+    local_eaten_at,
+    resolve_eaten_at,
+    utc_window,
+)
 from healthy_eating.services.settings import get_time_zone
 
 # Atwater factors: kcal per gram of protein, fat and carbohydrates.
@@ -200,3 +205,70 @@ async def save_meal(session: AsyncSession, user_id: uuid.UUID, meal: MealEstimat
 
     await session.flush()
     return row
+
+
+@dataclass(frozen=True)
+class LocalMeal:
+    meal: Meal
+    # When the meal was eaten, in its local time (see services/local_time.py).
+    eaten_at: datetime
+
+
+@dataclass(frozen=True)
+class MealCursor:
+    """Position after the last meal of a page, for keyset pagination (newest first)."""
+
+    eaten_at: datetime
+    meal_id: uuid.UUID
+
+
+@dataclass(frozen=True)
+class MealPage:
+    meals: list[LocalMeal]
+    next_cursor: MealCursor | None
+
+
+def _local(meal: Meal, time_zone: str | None) -> LocalMeal:
+    return LocalMeal(
+        meal=meal,
+        eaten_at=local_eaten_at(meal.eaten_at, meal.utc_offset_minutes, time_zone),
+    )
+
+
+async def list_meals(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    first_day: date | None = None,
+    last_day: date | None = None,
+    after: MealCursor | None = None,
+    limit: int = 50,
+) -> MealPage:
+    """The user's meals eaten on the local days first_day..last_day (inclusive), newest first."""
+    time_zone = await get_time_zone(session, user_id)
+    query = select(Meal).where(Meal.user_id == user_id)
+    start, end = utc_window(first_day, last_day)
+    local_date = local_date_column(time_zone)
+    if start is not None:
+        query = query.where(Meal.eaten_at >= start, local_date >= first_day)
+    if end is not None:
+        query = query.where(Meal.eaten_at < end, local_date <= last_day)
+    if after is not None:
+        query = query.where(tuple_(Meal.eaten_at, Meal.id) < tuple_(after.eaten_at, after.meal_id))
+    query = query.order_by(Meal.eaten_at.desc(), Meal.id.desc()).limit(limit + 1)
+
+    rows = list(await session.scalars(query))
+    next_cursor = None
+    if len(rows) > limit:
+        rows = rows[:limit]
+        next_cursor = MealCursor(eaten_at=rows[-1].eaten_at, meal_id=rows[-1].id)
+    return MealPage(meals=[_local(row, time_zone) for row in rows], next_cursor=next_cursor)
+
+
+async def get_meal(
+    session: AsyncSession, user_id: uuid.UUID, meal_id: uuid.UUID
+) -> LocalMeal | None:
+    meal = await session.scalar(select(Meal).where(Meal.id == meal_id, Meal.user_id == user_id))
+    if meal is None:
+        return None
+    return _local(meal, await get_time_zone(session, user_id))
