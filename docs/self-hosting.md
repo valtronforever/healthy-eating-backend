@@ -105,10 +105,9 @@ Check it from outside: `https://food.example.com/health` and
   - **ChatGPT:** only on the ChatGPT website (chatgpt.com), not in the ChatGPT apps. Open
     Plugins, select +, then **Add custom MCP server**; enter a name and the URL, review the risk
     warning, select **I understand and want to continue** and **Create as a plugin**. Install
-    the plugin, start a new chat, type `@` and choose it. Saving meals is a write action, which
-    OpenAI allows only in ChatGPT Business, Enterprise and Edu workspaces whose admins permit
-    custom MCP servers (permission **Create plugins with MCPs**); Pro accounts can connect with
-    read/fetch tools only. See OpenAI's
+    the plugin, start a new chat, type `@` and choose it. Saving meals works with a personal
+    ChatGPT Pro plan. In a Business, Enterprise or Edu workspace an admin must allow custom MCP
+    servers (permission **Create plugins with MCPs**). See OpenAI's
     [Connecting custom MCP servers in ChatGPT](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt).
   - **Other MCP clients:** add a remote MCP server (Streamable HTTP) with OAuth and the URL.
 - **iOS app:** enter `https://food.example.com` as the server address and sign in with the same
@@ -175,7 +174,7 @@ its settings.
 | App does not start | `docker compose -f compose.production.yml --env-file .env.production logs app`: production checks name the missing setting |
 | `database` not ok in `/health` | Postgres container status; `POSTGRES_PASSWORD` changed after the first start |
 | Assistant cannot connect | `BASE_URL` must be exactly the public `https` URL; the proxy must forward `/mcp` and `/.well-known/*` without buffering. Check the endpoint with `npx @modelcontextprotocol/inspector` |
-| ChatGPT shows no option to add an MCP server, or cannot save meals | Custom MCP servers are added on chatgpt.com under Plugins (not in the apps); write tools such as `log_meal` need a Business, Enterprise or Edu workspace that allows custom MCP servers |
+| ChatGPT shows no option to add an MCP server | Custom MCP servers are added on chatgpt.com under Plugins, not in the ChatGPT apps. In a Business, Enterprise or Edu workspace an admin must allow them |
 | ChatGPT does not see a changed tool | Open the plugin at chatgpt.com/plugins, select Refresh, then start a new chat. In a workspace an admin refreshes the published app's tool list |
 | Login page shows no providers | All variables of a provider must be set; restart after changing `.env.production` |
 | Saving a meal feels slow | The app logs every MCP request, for example `MCP tools/call log_meal: ok in 6.1 ms (session be30b0dc request 3, 14.2 s after the previous, 20.5 s in, client ChatGPT b4341645)`. Server time is usually a few milliseconds. The gap after the previous request in the same session is time spent in the assistant (the model thinking, the user confirming the action). Clients on the stateless MCP version send no session; their requests are counted per client (`no session request N`) |
