@@ -41,7 +41,21 @@ from healthy_eating.db.models import (
 )
 from healthy_eating.services.connections import record_grant_use, revoke_grant
 
-SCOPES = ["nutrition"]
+# Access to the user's nutrition data: every token carries it (the MCP endpoint requires it).
+NUTRITION_SCOPE = "nutrition"
+# Asks for a refresh token (OpenID Connect). Refresh tokens are always issued; the scope is
+# advertised and accepted because some clients (ChatGPT) only refresh when it is listed.
+OFFLINE_ACCESS_SCOPE = "offline_access"
+SCOPES = [NUTRITION_SCOPE, OFFLINE_ACCESS_SCOPE]
+REQUIRED_SCOPES = [NUTRITION_SCOPE]
+
+
+def granted_scopes(requested: list[str] | None) -> list[str]:
+    """The scopes of a sign-in: what the client asked for, always including `nutrition`."""
+    scopes = list(requested or SCOPES)
+    if NUTRITION_SCOPE not in scopes:
+        scopes.insert(0, NUTRITION_SCOPE)
+    return scopes
 
 
 class LoginRequestNotFoundError(Exception):
@@ -65,7 +79,7 @@ class PostgresOAuthProvider(OAuthProvider):
                 enabled=True, valid_scopes=SCOPES, default_scopes=SCOPES
             ),
             revocation_options=RevocationOptions(enabled=True),
-            required_scopes=SCOPES,
+            required_scopes=REQUIRED_SCOPES,
         )
         self._settings = settings
         self._db = db
@@ -115,7 +129,7 @@ class PostgresOAuthProvider(OAuthProvider):
                     redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
                     code_challenge=params.code_challenge,
                     state=params.state,
-                    scopes=params.scopes or SCOPES,
+                    scopes=granted_scopes(params.scopes),
                     resource=params.resource,
                     expires_at=utcnow() + timedelta(seconds=self._settings.login_ttl_seconds),
                 )

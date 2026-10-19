@@ -125,6 +125,7 @@ Rules:
 - Strict redirect URI validation: `https`, loopback (`http://127.0.0.1` / `localhost`) and the app's custom scheme only.
 - Auth codes are short-lived and single-use. All tokens are opaque and stored only as SHA-256 hashes. Every sign-in is a row in `grants`; its tokens share the `grant_id`. Refresh tokens rotate, and presenting a rotated refresh token again revokes the whole grant. Revoke grants only through `services/connections.py:revoke_grant`, so the grant row and all tokens end together.
 - Expose `/.well-known/oauth-authorization-server` and `/.well-known/oauth-protected-resource`. The MCP endpoint and the REST API accept the same bearer tokens.
+- Scopes: `nutrition` (every token carries it; the MCP endpoint requires it) and `offline_access` (advertised and accepted because some clients, ChatGPT, only use refresh tokens when it is listed; refresh tokens are issued either way). A sign-in always includes `nutrition`, even when the client asked only for `offline_access`. Clients registered before `offline_access` existed can only request `nutrition`; they register again to get it.
 - `DEV_LOGIN_ENABLED` adds an email-only login for local development and tests. `Settings` refuses it in production; never weaken that check.
 - Library behavior to keep in mind: FastMCP answers `invalid_grant` with HTTP 401 (MCP spec), the MCP SDK's `/revoke` requires a `client_secret` form field even for public clients (send it empty), and the issuer (`BASE_URL`) must be `https` or `localhost`.
 

@@ -53,7 +53,8 @@ async def test_sign_in_returns_tokens_for_rest_api(http: httpx.AsyncClient) -> N
     client = await register_client(http)
     tokens = await sign_in(http, client, email="Alice@Example.com")
     assert tokens["token_type"] == "Bearer"
-    assert tokens["scope"] == "nutrition"
+    # No scope requested: the defaults, nutrition plus offline_access.
+    assert tokens["scope"] == "nutrition offline_access"
 
     me = await http.get("/api/v1/me", headers=bearer(tokens["access_token"]))
     assert me.status_code == 200
