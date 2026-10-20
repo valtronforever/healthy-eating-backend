@@ -1,8 +1,9 @@
 """Application factory. Run with: uvicorn --factory healthy_eating.main:create_app"""
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
@@ -19,6 +20,7 @@ from healthy_eating.auth.social import SocialLogin
 from healthy_eating.config import Settings
 from healthy_eating.db import Database
 from healthy_eating.mcp_server.server import create_mcp_server
+from healthy_eating.services.cleanup import run_cleanup_periodically
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -31,9 +33,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        async with mcp_app.lifespan(app):
-            yield
-        await db.dispose()
+        cleanup = None
+        if settings.cleanup_interval_seconds:
+            cleanup = asyncio.create_task(
+                run_cleanup_periodically(db, settings.cleanup_interval_seconds)
+            )
+        try:
+            async with mcp_app.lifespan(app):
+                yield
+        finally:
+            if cleanup is not None:
+                cleanup.cancel()
+                with suppress(asyncio.CancelledError):
+                    await cleanup
+            await db.dispose()
 
     app = FastAPI(title="Healthy Eating", version=__version__, lifespan=lifespan)
     app.state.settings = settings

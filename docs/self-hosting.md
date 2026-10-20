@@ -55,7 +55,9 @@ docker compose -f compose.production.yml --env-file .env.production ps
 curl http://127.0.0.1:8000/health      # {"status":"ok","database":"ok"}
 ```
 
-Database migrations run automatically on every start. Both containers restart on failure and
+Database migrations run automatically on every start. Once an hour the app deletes expired
+login requests, authorization codes and tokens by itself (`CLEANUP_INTERVAL_SECONDS`), so no
+cron job is needed. Both containers restart on failure and
 after a reboot. Postgres is not reachable from outside the Compose network, and the app
 listens only on `127.0.0.1`.
 

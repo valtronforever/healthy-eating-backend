@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     refresh_token_ttl_seconds: int = Field(default=60 * 60 * 24 * 90, gt=0)
     authorization_code_ttl_seconds: int = Field(default=300, gt=0)
     login_ttl_seconds: int = Field(default=900, gt=0)
+    # How often expired login requests, codes and tokens are deleted; 0 turns it off.
+    cleanup_interval_seconds: int = Field(default=3600, ge=0)
 
     # Lets you sign in with any email address, without a social provider.
     # Only allowed in development.
