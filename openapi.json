@@ -854,6 +854,74 @@
         }
       }
     },
+    "/api/v1/weekly-review": {
+      "get": {
+        "tags": [
+          "days"
+        ],
+        "summary": "Read Weekly Review",
+        "description": "One local week, Monday to Sunday, as neutral facts: averages, patterns, data quality.",
+        "operationId": "getWeeklyReview",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "week",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Any local day (YYYY-MM-DD) of the week; default: this week",
+              "title": "Week"
+            },
+            "description": "Any local day (YYYY-MM-DD) of the week; default: this week"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeeklyReviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/integration-status": {
       "get": {
         "tags": [
@@ -1142,6 +1210,31 @@
           "connections"
         ],
         "title": "ConnectionsResponse"
+      },
+      "DayGroupResponse": {
+        "properties": {
+          "counted_days": {
+            "type": "integer",
+            "title": "Counted Days"
+          },
+          "averages": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Nutrients"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average per counted day; null if none counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "counted_days",
+          "averages"
+        ],
+        "title": "DayGroupResponse"
       },
       "DayStatusResponse": {
         "properties": {
@@ -1481,6 +1574,33 @@
           "arrival_status"
         ],
         "title": "IntegrationStatusResponse"
+      },
+      "LeftOutDayResponse": {
+        "properties": {
+          "local_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Local Date"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "future",
+              "in_progress",
+              "not_logged",
+              "partial",
+              "not_marked_complete"
+            ],
+            "title": "Reason",
+            "description": "'future': not yet; 'in_progress': today, not marked complete; 'not_logged': no meals; 'partial': marked partial; 'not_marked_complete': only complete days count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "local_date",
+          "reason"
+        ],
+        "title": "LeftOutDayResponse"
       },
       "MeResponse": {
         "properties": {
@@ -1912,6 +2032,37 @@
         ],
         "title": "PeriodResponse"
       },
+      "ProteinBucketResponse": {
+        "properties": {
+          "min_g": {
+            "type": "number",
+            "title": "Min G"
+          },
+          "max_g": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max G",
+            "description": "Exclusive; null for the last bucket"
+          },
+          "meals": {
+            "type": "integer",
+            "title": "Meals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "min_g",
+          "max_g",
+          "meals"
+        ],
+        "title": "ProteinBucketResponse"
+      },
       "RevokeResponse": {
         "properties": {
           "grant_id": {
@@ -2147,6 +2298,138 @@
           "change"
         ],
         "title": "TrendsResponse"
+      },
+      "WeeklyReviewResponse": {
+        "properties": {
+          "first_day": {
+            "type": "string",
+            "format": "date",
+            "title": "First Day",
+            "description": "Monday of the local week"
+          },
+          "last_day": {
+            "type": "string",
+            "format": "date",
+            "title": "Last Day",
+            "description": "Sunday of the local week"
+          },
+          "counting_rule": {
+            "type": "string",
+            "enum": [
+              "complete_days",
+              "logged_days"
+            ],
+            "title": "Counting Rule"
+          },
+          "logged_days": {
+            "type": "integer",
+            "title": "Logged Days",
+            "description": "Days with at least one meal"
+          },
+          "complete_days": {
+            "type": "integer",
+            "title": "Complete Days",
+            "description": "Days marked complete"
+          },
+          "counted_days": {
+            "type": "integer",
+            "title": "Counted Days",
+            "description": "Days the averages are taken over"
+          },
+          "averages": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Nutrients"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average per counted day (as in Trends); null if no day counts"
+          },
+          "left_out": {
+            "items": {
+              "$ref": "#/components/schemas/LeftOutDayResponse"
+            },
+            "type": "array",
+            "title": "Left Out",
+            "description": "Every day of the week the averages leave out, with the reason"
+          },
+          "weekdays": {
+            "$ref": "#/components/schemas/DayGroupResponse",
+            "description": "Counted days Monday to Friday"
+          },
+          "weekend": {
+            "$ref": "#/components/schemas/DayGroupResponse",
+            "description": "Counted Saturday and Sunday"
+          },
+          "meal_count": {
+            "type": "integer",
+            "title": "Meal Count",
+            "description": "All meals of the week, counted days or not"
+          },
+          "protein_per_meal_g": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protein Per Meal G",
+            "description": "Average protein per meal"
+          },
+          "protein_buckets": {
+            "items": {
+              "$ref": "#/components/schemas/ProteinBucketResponse"
+            },
+            "type": "array",
+            "title": "Protein Buckets",
+            "description": "How many meals had protein in each range (0-10, 10-20, 20-30, 30-40, 40+ g)"
+          },
+          "late_meals": {
+            "type": "integer",
+            "title": "Late Meals",
+            "description": "Meals eaten from 21:00 until 04:00 in their local time"
+          },
+          "estimated_values_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Values Share",
+            "description": "Share of the meals' values (calories and three macros each) the assistant estimated, 0 to 1; the rest are the person's own numbers. Null without meals"
+          },
+          "low_confidence_meals": {
+            "type": "integer",
+            "title": "Low Confidence Meals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_day",
+          "last_day",
+          "counting_rule",
+          "logged_days",
+          "complete_days",
+          "counted_days",
+          "averages",
+          "left_out",
+          "weekdays",
+          "weekend",
+          "meal_count",
+          "protein_per_meal_g",
+          "protein_buckets",
+          "late_meals",
+          "estimated_values_share",
+          "low_confidence_meals"
+        ],
+        "title": "WeeklyReviewResponse"
       }
     },
     "securitySchemes": {

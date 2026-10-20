@@ -10,6 +10,7 @@ from healthy_eating.api.v1 import (
     meals,
     settings,
     trends,
+    weekly_review,
 )
 
 router = APIRouter(
@@ -24,6 +25,7 @@ router.include_router(settings.router)
 router.include_router(meals.router)
 router.include_router(days.router)
 router.include_router(trends.router)
+router.include_router(weekly_review.router)
 router.include_router(integration.router)
 router.include_router(connections.router)
 router.include_router(export.router)
