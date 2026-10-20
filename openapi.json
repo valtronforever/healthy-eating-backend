@@ -1461,13 +1461,24 @@
             "type": "integer",
             "title": "Meals Today",
             "description": "Meals eaten on the user's local today"
+          },
+          "arrival_status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "quiet",
+              "unknown"
+            ],
+            "title": "Arrival Status",
+            "description": "Whether meals still reach Healthy Eating as usual: 'ok'; 'quiet' when nothing arrived yesterday, or today although the usual time has passed (the integration may be broken); 'unknown' for new users and irregular patterns. About the integration, never about how much the user eats or logs"
           }
         },
         "type": "object",
         "required": [
           "last_meal_saved_at",
           "last_client_name",
-          "meals_today"
+          "meals_today",
+          "arrival_status"
         ],
         "title": "IntegrationStatusResponse"
       },

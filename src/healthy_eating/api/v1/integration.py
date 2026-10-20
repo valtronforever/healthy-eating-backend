@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
 from healthy_eating.db.base import utcnow
-from healthy_eating.services.integration import integration_status
+from healthy_eating.services.integration import ArrivalStatus, integration_status
 
 router = APIRouter(tags=["account"])
 
@@ -16,6 +16,14 @@ class IntegrationStatusResponse(BaseModel):
     )
     last_client_name: str | None = Field(description="The AI assistant that saved it, if known")
     meals_today: int = Field(description="Meals eaten on the user's local today")
+    arrival_status: ArrivalStatus = Field(
+        description=(
+            "Whether meals still reach Healthy Eating as usual: 'ok'; 'quiet' when nothing "
+            "arrived yesterday, or today although the usual time has passed (the integration "
+            "may be broken); 'unknown' for new users and irregular patterns. About the "
+            "integration, never about how much the user eats or logs"
+        )
+    )
 
 
 @router.get("/integration-status", operation_id="getIntegrationStatus")
@@ -28,4 +36,5 @@ async def read_integration_status(
         last_meal_saved_at=status.last_meal_saved_at,
         last_client_name=status.last_client_name,
         meals_today=status.meals_today,
+        arrival_status=status.arrival_status,
     )

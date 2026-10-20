@@ -140,6 +140,7 @@ Rules:
 - Day completeness (`services/days.py`): a local day can be marked `complete` or `partial` by the user (app) or the assistant (`set_day_status`). Averages count only complete days with meals once the user has marked any day complete; otherwise every day with meals except partial ones. Days without meals never count. Use `day_counts()` for every average.
 - A meal's local day uses its stored offset first, then the user's current time zone, then UTC (`services/local_time.py`). Use these helpers for every per-day query so the REST API and MCP tools agree.
 - Store timestamps in UTC plus the user's IANA timezone. Daily aggregates are computed in the user's local day.
+- Meals stop arriving (`services/integration.py:arrival_status`, field `arrival_status` of `/api/v1/integration-status`): judged from when meals reached the server (`created_at`), not when they were eaten. `unknown` below 23 save days in the last 28 local days; `quiet` when nothing was saved yesterday, or today after the usual first-save time (80th percentile) plus 2 h; otherwise `ok`. It describes the integration, never the user's eating or logging, and its wording must stay neutral.
 - Nutrient reference data must come from open sources with compatible licenses (e.g. USDA FoodData Central: public domain; Open Food Facts: ODbL, so attribute and keep it as a separate database, not mixed into our code).
 
 ## MCP tool guidelines
