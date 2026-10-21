@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from healthy_eating.db.models import Meal
-from healthy_eating.nutrition.types import NUTRIENT_FIELDS, NutrientField
+from healthy_eating.nutrition.types import NUTRIENT_FIELDS, OPTIONAL_NUTRIENT_FIELDS, NutrientField
 from healthy_eating.services.days import local_today
 from healthy_eating.services.local_time import local_date_column, local_eaten_at, utc_window
 from healthy_eating.services.settings import get_time_zone
@@ -68,7 +68,8 @@ class WeeklyReview:
     protein_per_meal_g: float | None
     protein_buckets: list[ProteinBucket]
     late_meals: int
-    # Share of the meals' values (four per meal) the assistant estimated; None without meals.
+    # Share of the meals' values (four per meal plus the optional ones it has) the assistant
+    # estimated; None without meals.
     estimated_values_share: float | None
     low_confidence_meals: int
 
@@ -144,6 +145,9 @@ async def weekly_review(
                 Meal.eaten_at,
                 Meal.utc_offset_minutes,
                 Meal.protein_g,
+                Meal.fiber_g,
+                Meal.sugar_g,
+                Meal.sodium_mg,
                 Meal.estimated_fields,
                 Meal.confidence,
             ).where(
@@ -157,6 +161,12 @@ async def weekly_review(
     ).all()
     protein = [meal.protein_g for meal in meals]
     estimated_values = sum(len(meal.estimated_fields) for meal in meals)
+    # Four values per meal, plus the optional ones it has.
+    values = sum(
+        len(NUTRIENT_FIELDS)
+        + sum(1 for name in OPTIONAL_NUTRIENT_FIELDS if getattr(meal, name) is not None)
+        for meal in meals
+    )
 
     return WeeklyReview(
         first_day=first_day,
@@ -183,8 +193,6 @@ async def weekly_review(
             for meal in meals
             if _is_late(local_eaten_at(meal.eaten_at, meal.utc_offset_minutes, time_zone))
         ),
-        estimated_values_share=(
-            round(estimated_values / (len(meals) * len(NUTRIENT_FIELDS)), 3) if meals else None
-        ),
+        estimated_values_share=(round(estimated_values / values, 3) if meals else None),
         low_confidence_meals=sum(1 for meal in meals if meal.confidence == "low"),
     )

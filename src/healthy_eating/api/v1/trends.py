@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from healthy_eating.api.deps import CurrentUserId, SessionDep
 from healthy_eating.db.base import utcnow
 from healthy_eating.services.summaries import CountingRule
-from healthy_eating.services.trends import WINDOWS, Period, trends
+from healthy_eating.services.trends import WINDOWS, OptionalAverage, Period, trends
 
 router = APIRouter(tags=["days"])
 
@@ -19,6 +19,17 @@ class Nutrients(BaseModel):
     carbohydrates_g: float
 
 
+class OptionalAverageResponse(BaseModel):
+    average: float = Field(description="Average over the counted days that have a value")
+    days: int = Field(description="How many counted days have a value")
+
+
+def _optional(average: OptionalAverage | None) -> OptionalAverageResponse | None:
+    if average is None:
+        return None
+    return OptionalAverageResponse(average=average.average, days=average.days)
+
+
 class PeriodResponse(BaseModel):
     first_day: date
     last_day: date
@@ -28,6 +39,11 @@ class PeriodResponse(BaseModel):
     estimated_calories_share: float | None = Field(
         description="Share of the counted days' calories the assistant estimated (0 to 1)"
     )
+    fiber_g: OptionalAverageResponse | None = Field(
+        description="Optional nutrients: null when no counted day has a value"
+    )
+    sugar_g: OptionalAverageResponse | None
+    sodium_mg: OptionalAverageResponse | None = Field(description="In mg")
 
 
 class TrendsResponse(BaseModel):
@@ -50,6 +66,9 @@ def _period(period: Period) -> PeriodResponse:
         logged_days=period.logged_days,
         averages=None if period.averages is None else Nutrients(**period.averages),
         estimated_calories_share=period.estimated_calories_share,
+        fiber_g=_optional(period.optional_averages.get("fiber_g")),
+        sugar_g=_optional(period.optional_averages.get("sugar_g")),
+        sodium_mg=_optional(period.optional_averages.get("sodium_mg")),
     )
 
 

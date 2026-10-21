@@ -67,8 +67,9 @@ class WeeklyReviewResponse(BaseModel):
     )
     estimated_values_share: float | None = Field(
         description=(
-            "Share of the meals' values (calories and three macros each) the assistant "
-            "estimated, 0 to 1; the rest are the person's own numbers. Null without meals"
+            "Share of the meals' values (calories, three macros and any fiber, sugar or "
+            "sodium) the assistant estimated, 0 to 1; the rest are the person's own numbers. "
+            "Null without meals"
         )
     )
     low_confidence_meals: int

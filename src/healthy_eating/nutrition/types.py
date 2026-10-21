@@ -11,8 +11,19 @@ CONFIDENCE_VALUES: tuple[Confidence, ...] = get_args(Confidence)
 MealSource = Literal["estimated_by_assistant", "from_conversation"]
 MEAL_SOURCES: tuple[MealSource, ...] = get_args(MealSource)
 
+# The four values every meal needs.
 NutrientField = Literal["calories_kcal", "protein_g", "fat_g", "carbohydrates_g"]
 NUTRIENT_FIELDS: tuple[NutrientField, ...] = get_args(NutrientField)
+
+# Values a meal may have in addition: fiber and sugar in g, sodium in mg.
+OptionalNutrientField = Literal["fiber_g", "sugar_g", "sodium_mg"]
+OPTIONAL_NUTRIENT_FIELDS: tuple[OptionalNutrientField, ...] = get_args(OptionalNutrientField)
+
+# Every nutrition value a meal can store, and can mark as estimated.
+TrackedNutrientField = Literal[
+    "calories_kcal", "protein_g", "fat_g", "carbohydrates_g", "fiber_g", "sugar_g", "sodium_mg"
+]
+TRACKED_NUTRIENT_FIELDS: tuple[TrackedNutrientField, ...] = get_args(TrackedNutrientField)
 
 # Unit the user wants energy shown in. Energy is always stored in kcal.
 EnergyUnit = Literal["kcal", "kj"]

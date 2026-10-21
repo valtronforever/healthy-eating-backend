@@ -16,12 +16,18 @@ from healthy_eating.nutrition.types import (
     ENERGY_UNITS,
     MEAL_SOURCES,
     NUTRIENT_FIELDS,
+    OPTIONAL_NUTRIENT_FIELDS,
     STATUS_SETTERS,
+    TRACKED_NUTRIENT_FIELDS,
 )
 
 
+def _quoted(values: tuple[str, ...]) -> str:
+    return ", ".join(repr(v) for v in values)
+
+
 def _one_of(column: str, values: tuple[str, ...]) -> str:
-    return f"{column} IN ({', '.join(repr(v) for v in values)})"
+    return f"{column} IN ({_quoted(values)})"
 
 
 def _target_range(field: str) -> str:
@@ -197,9 +203,13 @@ class Meal(TimestampMixin, Base):
         CheckConstraint(
             " AND ".join(f"{name} >= 0" for name in NUTRIENT_FIELDS), name="non_negative"
         ),
+        CheckConstraint(
+            " AND ".join(f"({name} IS NULL OR {name} >= 0)" for name in OPTIONAL_NUTRIENT_FIELDS),
+            name="optional_non_negative",
+        ),
         CheckConstraint("portion_grams IS NULL OR portion_grams > 0", name="portion_positive"),
         CheckConstraint(
-            f"estimated_fields <@ ARRAY[{', '.join(repr(v) for v in NUTRIENT_FIELDS)}]::text[]",
+            f"estimated_fields <@ ARRAY[{_quoted(TRACKED_NUTRIENT_FIELDS)}]::text[]",
             name="estimated_fields",
         ),
         Index("ix_meals_user_id_eaten_at", "user_id", "eaten_at"),
@@ -220,6 +230,10 @@ class Meal(TimestampMixin, Base):
     protein_g: Mapped[float]
     fat_g: Mapped[float]
     carbohydrates_g: Mapped[float]
+    # Optional; NULL when the meal has no value for them.
+    fiber_g: Mapped[float | None]
+    sugar_g: Mapped[float | None]
+    sodium_mg: Mapped[float | None]
     # Values the assistant estimated, as opposed to values from the user's own workflow.
     estimated_fields: Mapped[list[str]] = mapped_column(ARRAY(Text))
     confidence: Mapped[str] = mapped_column(String(8))

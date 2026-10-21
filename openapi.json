@@ -1321,6 +1321,38 @@
             "type": "number",
             "title": "Carbohydrates G"
           },
+          "fiber_g": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NutrientTotalResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional nutrients: null when no meal of the day has a value"
+          },
+          "sugar_g": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NutrientTotalResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sodium_mg": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NutrientTotalResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In mg"
+          },
           "estimated_calories_share": {
             "anyOf": [
               {
@@ -1378,6 +1410,9 @@
           "protein_g",
           "fat_g",
           "carbohydrates_g",
+          "fiber_g",
+          "sugar_g",
+          "sodium_mg",
           "estimated_calories_share",
           "status",
           "status_set_by",
@@ -1739,6 +1774,42 @@
             "type": "number",
             "title": "Carbohydrates G"
           },
+          "fiber_g": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiber G",
+            "description": "Optional; null when the meal has no value"
+          },
+          "sugar_g": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sugar G",
+            "description": "Optional, part of the carbohydrates"
+          },
+          "sodium_mg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sodium Mg",
+            "description": "Optional, in mg"
+          },
           "source": {
             "type": "string",
             "enum": [
@@ -1766,7 +1837,10 @@
                 "calories_kcal",
                 "protein_g",
                 "fat_g",
-                "carbohydrates_g"
+                "carbohydrates_g",
+                "fiber_g",
+                "sugar_g",
+                "sodium_mg"
               ]
             },
             "type": "array",
@@ -1817,6 +1891,9 @@
           "protein_g",
           "fat_g",
           "carbohydrates_g",
+          "fiber_g",
+          "sugar_g",
+          "sodium_mg",
           "source",
           "source_note",
           "estimated_fields",
@@ -1907,6 +1984,45 @@
             ],
             "title": "Carbohydrates G"
           },
+          "fiber_g": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fiber G"
+          },
+          "sugar_g": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sugar G"
+          },
+          "sodium_mg": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 20000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sodium Mg"
+          },
           "eaten_at": {
             "anyOf": [
               {
@@ -1924,7 +2040,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "MealUpdate",
-        "description": "Only the fields present are changed; only portion_grams may be null (removes it).\n\nChanged nutrition values become the user's own and lose their \"estimated\" mark."
+        "description": "Only the fields present are changed; portion_grams, fiber_g, sugar_g and sodium_mg may be\nnull (removes the value).\n\nChanged nutrition values become the user's own and lose their \"estimated\" mark."
       },
       "MealUpdateResponse": {
         "properties": {
@@ -1946,6 +2062,26 @@
           "warnings"
         ],
         "title": "MealUpdateResponse"
+      },
+      "NutrientTotalResponse": {
+        "properties": {
+          "amount": {
+            "type": "number",
+            "title": "Amount",
+            "description": "Sum over the meals of the day that have a value"
+          },
+          "meal_count": {
+            "type": "integer",
+            "title": "Meal Count",
+            "description": "How many of the day's meals have a value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "amount",
+          "meal_count"
+        ],
+        "title": "NutrientTotalResponse"
       },
       "Nutrients": {
         "properties": {
@@ -1974,6 +2110,26 @@
           "carbohydrates_g"
         ],
         "title": "Nutrients"
+      },
+      "OptionalAverageResponse": {
+        "properties": {
+          "average": {
+            "type": "number",
+            "title": "Average",
+            "description": "Average over the counted days that have a value"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days",
+            "description": "How many counted days have a value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "average",
+          "days"
+        ],
+        "title": "OptionalAverageResponse"
       },
       "PeriodResponse": {
         "properties": {
@@ -2019,6 +2175,38 @@
             ],
             "title": "Estimated Calories Share",
             "description": "Share of the counted days' calories the assistant estimated (0 to 1)"
+          },
+          "fiber_g": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptionalAverageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional nutrients: null when no counted day has a value"
+          },
+          "sugar_g": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptionalAverageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sodium_mg": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptionalAverageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In mg"
           }
         },
         "type": "object",
@@ -2028,7 +2216,10 @@
           "counted_days",
           "logged_days",
           "averages",
-          "estimated_calories_share"
+          "estimated_calories_share",
+          "fiber_g",
+          "sugar_g",
+          "sodium_mg"
         ],
         "title": "PeriodResponse"
       },
@@ -2403,7 +2594,7 @@
               }
             ],
             "title": "Estimated Values Share",
-            "description": "Share of the meals' values (calories and three macros each) the assistant estimated, 0 to 1; the rest are the person's own numbers. Null without meals"
+            "description": "Share of the meals' values (calories, three macros and any fiber, sugar or sodium) the assistant estimated, 0 to 1; the rest are the person's own numbers. Null without meals"
           },
           "low_confidence_meals": {
             "type": "integer",

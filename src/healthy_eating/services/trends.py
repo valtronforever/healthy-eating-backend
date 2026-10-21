@@ -11,11 +11,24 @@ from datetime import date, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from healthy_eating.nutrition.types import NUTRIENT_FIELDS, NutrientField
+from healthy_eating.nutrition.types import (
+    NUTRIENT_FIELDS,
+    OPTIONAL_NUTRIENT_FIELDS,
+    NutrientField,
+    OptionalNutrientField,
+)
 from healthy_eating.services.days import user_today
 from healthy_eating.services.summaries import CountingRule, DaySummary, daily_summaries
 
 WINDOWS = (7, 30, 90)
+
+
+@dataclass(frozen=True)
+class OptionalAverage:
+    """An optional nutrient's average over the counted days that have a value for it."""
+
+    average: float
+    days: int
 
 
 @dataclass(frozen=True)
@@ -29,6 +42,8 @@ class Period:
     averages: dict[NutrientField, float] | None
     # Share of the counted days' calories that the assistant estimated.
     estimated_calories_share: float | None
+    # Fiber, sugar and sodium; a nutrient is missing when no counted day has a value.
+    optional_averages: dict[OptionalNutrientField, OptionalAverage]
 
 
 @dataclass(frozen=True)
@@ -55,6 +70,13 @@ def _period(days: list[DaySummary], today: date) -> Period:
         calories = sum(day.calories_kcal for day in counted)
         if calories > 0:
             share = round(sum(day.estimated_calories_kcal for day in counted) / calories, 3)
+    optional_averages = {}
+    for name in OPTIONAL_NUTRIENT_FIELDS:
+        amounts = [day.optional[name].amount for day in counted if name in day.optional]
+        if amounts:
+            optional_averages[name] = OptionalAverage(
+                average=round(sum(amounts) / len(amounts), 1), days=len(amounts)
+            )
     return Period(
         first_day=days[0].local_date,
         last_day=days[-1].local_date,
@@ -62,6 +84,7 @@ def _period(days: list[DaySummary], today: date) -> Period:
         logged_days=sum(1 for day in days if day.meal_count > 0),
         averages=averages,
         estimated_calories_share=share,
+        optional_averages=optional_averages,
     )
 
 

@@ -57,6 +57,7 @@ their meaning.
 | `utc_offset_minutes` | Offset of the local time, empty/null when it was not known |
 | `portion_grams` | Portion weight, if known |
 | `calories_kcal`, `protein_g`, `fat_g`, `carbohydrates_g` | Values for the whole portion |
+| `fiber_g`, `sugar_g`, `sodium_mg` | Optional values for the whole portion (sodium in mg); empty when not known |
 | `source` | `from_conversation` (numbers from the user's own workflow) or `estimated_by_assistant` |
 | `source_note` | Where existing numbers came from, e.g. "Google Sheets log" |
 | `estimated_fields` | Values the assistant estimated (JSON list; in CSV joined with `;`) |

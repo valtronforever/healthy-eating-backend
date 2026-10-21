@@ -17,6 +17,7 @@ from healthy_eating.services.days import (
 from healthy_eating.services.summaries import (
     CountingRule,
     DaySummary,
+    NutrientTotal,
     RangeTooLongError,
     daily_summaries,
 )
@@ -45,6 +46,17 @@ def day_status_response(info: DayStatusInfo) -> DayStatusResponse:
     )
 
 
+class NutrientTotalResponse(BaseModel):
+    amount: float = Field(description="Sum over the meals of the day that have a value")
+    meal_count: int = Field(description="How many of the day's meals have a value")
+
+
+def nutrient_total(total: NutrientTotal | None) -> NutrientTotalResponse | None:
+    if total is None:
+        return None
+    return NutrientTotalResponse(amount=total.amount, meal_count=total.meal_count)
+
+
 class DaySummaryResponse(BaseModel):
     date: date
     meal_count: int
@@ -52,6 +64,11 @@ class DaySummaryResponse(BaseModel):
     protein_g: float
     fat_g: float
     carbohydrates_g: float
+    fiber_g: NutrientTotalResponse | None = Field(
+        description="Optional nutrients: null when no meal of the day has a value"
+    )
+    sugar_g: NutrientTotalResponse | None
+    sodium_mg: NutrientTotalResponse | None = Field(description="In mg")
     estimated_calories_share: float | None = Field(
         description=(
             "Share of the day's calories the assistant estimated (0 to 1); null without calories"
@@ -81,6 +98,9 @@ def _day_response(day: DaySummary) -> DaySummaryResponse:
         protein_g=day.protein_g,
         fat_g=day.fat_g,
         carbohydrates_g=day.carbohydrates_g,
+        fiber_g=nutrient_total(day.optional.get("fiber_g")),
+        sugar_g=nutrient_total(day.optional.get("sugar_g")),
+        sodium_mg=nutrient_total(day.optional.get("sodium_mg")),
         estimated_calories_share=day.estimated_calories_share,
         status=day.status,
         status_set_by=day.status_set_by,

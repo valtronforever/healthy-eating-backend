@@ -9,12 +9,18 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
 from healthy_eating.api.errors import error_response
-from healthy_eating.nutrition.types import Confidence, MealSource, NutrientField
+from healthy_eating.nutrition.types import (
+    OPTIONAL_NUTRIENT_FIELDS,
+    Confidence,
+    MealSource,
+    TrackedNutrientField,
+)
 from healthy_eating.services.meals import (
     MAX_CALORIES_KCAL,
     MAX_DISH_NAME_LENGTH,
     MAX_MACRONUTRIENT_G,
     MAX_PORTION_GRAMS,
+    MAX_SODIUM_MG,
     LocalMeal,
     MealCursor,
     MealEdit,
@@ -44,6 +50,9 @@ class MealResponse(BaseModel):
     protein_g: float
     fat_g: float
     carbohydrates_g: float
+    fiber_g: float | None = Field(description="Optional; null when the meal has no value")
+    sugar_g: float | None = Field(description="Optional, part of the carbohydrates")
+    sodium_mg: float | None = Field(description="Optional, in mg")
     source: MealSource = Field(
         description=(
             "'from_conversation': values came from the user's own workflow; "
@@ -51,7 +60,7 @@ class MealResponse(BaseModel):
         )
     )
     source_note: str | None
-    estimated_fields: list[NutrientField] = Field(
+    estimated_fields: list[TrackedNutrientField] = Field(
         description="Values the assistant estimated rather than took from the user's workflow"
     )
     confidence: Confidence
@@ -68,7 +77,8 @@ class MealListResponse(BaseModel):
 
 
 class MealUpdate(BaseModel):
-    """Only the fields present are changed; only portion_grams may be null (removes it).
+    """Only the fields present are changed; portion_grams, fiber_g, sugar_g and sodium_mg may be
+    null (removes the value).
 
     Changed nutrition values become the user's own and lose their "estimated" mark.
     """
@@ -81,13 +91,16 @@ class MealUpdate(BaseModel):
     protein_g: float | None = Field(default=None, ge=0, le=MAX_MACRONUTRIENT_G)
     fat_g: float | None = Field(default=None, ge=0, le=MAX_MACRONUTRIENT_G)
     carbohydrates_g: float | None = Field(default=None, ge=0, le=MAX_MACRONUTRIENT_G)
+    fiber_g: float | None = Field(default=None, ge=0, le=MAX_MACRONUTRIENT_G)
+    sugar_g: float | None = Field(default=None, ge=0, le=MAX_MACRONUTRIENT_G)
+    sodium_mg: float | None = Field(default=None, ge=0, le=MAX_SODIUM_MG)
     eaten_at: datetime | None = Field(
         default=None, description="ISO 8601; without an offset it is read in the user's time zone"
     )
 
     @model_validator(mode="after")
     def _check_not_null(self) -> Self:
-        for name in self.model_fields_set - {"portion_grams"}:
+        for name in self.model_fields_set - {"portion_grams", *OPTIONAL_NUTRIENT_FIELDS}:
             if getattr(self, name) is None:
                 raise ValueError(f"{name} cannot be null")
         return self
@@ -117,6 +130,9 @@ def _meal_response(local: LocalMeal) -> MealResponse:
         protein_g=meal.protein_g,
         fat_g=meal.fat_g,
         carbohydrates_g=meal.carbohydrates_g,
+        fiber_g=meal.fiber_g,
+        sugar_g=meal.sugar_g,
+        sodium_mg=meal.sodium_mg,
         source=meal.source,
         source_note=meal.source_note,
         estimated_fields=meal.estimated_fields,

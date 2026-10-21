@@ -15,6 +15,7 @@ from evals.environment import FIXTURES_DIR, EvalEnvironment, Turn
 from evals.personas import CALORIE_PROJECT, CHAT
 from healthy_eating.db.base import utcnow
 from healthy_eating.db.models import Meal
+from healthy_eating.nutrition.types import NUTRIENT_FIELDS, OPTIONAL_NUTRIENT_FIELDS
 
 HEALTHY_EATING = re.compile(r"healthy ?eating", re.IGNORECASE)
 POSITIVE = re.compile(r"\b(saved|updated|logged|recorded|added)\b", re.IGNORECASE)
@@ -141,9 +142,15 @@ async def numbers_from_conversation(
             "source is from_conversation", meal.source == "from_conversation", meal.source
         )
         checks.require(
-            "nothing marked as estimated",
-            meal.estimated_fields == [],
+            "none of the user's four numbers marked as estimated",
+            not set(meal.estimated_fields) & set(NUTRIENT_FIELDS),
             str(meal.estimated_fields),
+        )
+        added = [name for name in OPTIONAL_NUTRIENT_FIELDS if getattr(meal, name) is not None]
+        checks.require(
+            "fiber, sugar or sodium the assistant added are marked as estimated",
+            set(added) <= set(meal.estimated_fields),
+            f"added {added}, estimated {meal.estimated_fields}",
         )
     _require_confirmation(env, checks, turn.reply)
 
@@ -190,6 +197,12 @@ async def photo(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None
             f"stored {_values(meal)}",
         )
         checks.note("confidence", True, meal.confidence)
+        given = {name: getattr(meal, name) for name in OPTIONAL_NUTRIENT_FIELDS}
+        checks.note(
+            "fiber, sugar and sodium estimated",
+            all(value is not None for value in given.values()),
+            str(given),
+        )
     _require_confirmation(env, checks, last.reply)
 
 

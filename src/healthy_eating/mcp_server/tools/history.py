@@ -11,10 +11,10 @@ from pydantic import BaseModel, Field
 from healthy_eating.db import Database
 from healthy_eating.db.base import utcnow
 from healthy_eating.mcp_server.context import current_user_id
-from healthy_eating.nutrition.types import DayStatus, MealSource, NutrientField
+from healthy_eating.nutrition.types import DayStatus, MealSource, TrackedNutrientField
 from healthy_eating.services.days import user_today
 from healthy_eating.services.meals import delete_meal, get_meal, list_meals
-from healthy_eating.services.summaries import CountingRule, daily_summaries
+from healthy_eating.services.summaries import CountingRule, NutrientTotal, daily_summaries
 
 # Longest range the read tools accept, to keep results small for the model.
 MAX_TOOL_DAYS = 31
@@ -81,8 +81,11 @@ class SavedMealItem(BaseModel):
     protein_g: float
     fat_g: float
     carbohydrates_g: float
+    fiber_g: float | None
+    sugar_g: float | None
+    sodium_mg: float | None
     source: MealSource
-    estimated_fields: list[NutrientField]
+    estimated_fields: list[TrackedNutrientField]
 
 
 class MealList(BaseModel):
@@ -99,6 +102,9 @@ class DayTotals(BaseModel):
     protein_g: float
     fat_g: float
     carbohydrates_g: float
+    fiber_g: float | None = Field(description="Sum over the meals that have a value; else null")
+    sugar_g: float | None
+    sodium_mg: float | None = Field(description="In mg")
     estimated_calories_share: float | None = Field(
         description="Share of the calories the assistant estimated (0 to 1)"
     )
@@ -109,6 +115,10 @@ class DayTotals(BaseModel):
 class DailySummary(BaseModel):
     days: list[DayTotals] = Field(description="Oldest first")
     counting_rule: CountingRule
+
+
+def _amount(total: NutrientTotal | None) -> float | None:
+    return None if total is None else total.amount
 
 
 class DeleteMealResult(BaseModel):
@@ -144,6 +154,9 @@ def register(mcp: FastMCP, db: Database) -> None:
                     protein_g=item.meal.protein_g,
                     fat_g=item.meal.fat_g,
                     carbohydrates_g=item.meal.carbohydrates_g,
+                    fiber_g=item.meal.fiber_g,
+                    sugar_g=item.meal.sugar_g,
+                    sodium_mg=item.meal.sodium_mg,
                     source=item.meal.source,
                     estimated_fields=item.meal.estimated_fields,
                 )
@@ -175,6 +188,9 @@ def register(mcp: FastMCP, db: Database) -> None:
                     protein_g=day.protein_g,
                     fat_g=day.fat_g,
                     carbohydrates_g=day.carbohydrates_g,
+                    fiber_g=_amount(day.optional.get("fiber_g")),
+                    sugar_g=_amount(day.optional.get("sugar_g")),
+                    sodium_mg=_amount(day.optional.get("sodium_mg")),
                     estimated_calories_share=day.estimated_calories_share,
                     status=day.status,
                     counted=day.counted,

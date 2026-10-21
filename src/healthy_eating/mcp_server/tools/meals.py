@@ -9,13 +9,20 @@ from pydantic import BaseModel, Field
 from healthy_eating.db import Database
 from healthy_eating.db.models import Meal
 from healthy_eating.mcp_server.context import current_client_id, current_user_id
-from healthy_eating.nutrition.types import Confidence, MealSource, NutrientField
+from healthy_eating.nutrition.types import (
+    NUTRIENT_FIELDS,
+    Confidence,
+    MealSource,
+    NutrientField,
+    TrackedNutrientField,
+)
 from healthy_eating.services.meals import (
     MAX_CALORIES_KCAL,
     MAX_DESCRIPTION_LENGTH,
     MAX_DISH_NAME_LENGTH,
     MAX_MACRONUTRIENT_G,
     MAX_PORTION_GRAMS,
+    MAX_SODIUM_MG,
     MealEstimate,
     MealNotFoundError,
     evaluate_meal,
@@ -46,6 +53,10 @@ HealthyEating needs all four values for every meal:
   the user's answer, save your best estimate without new questions.
 - Only if you cannot estimate a value at all, leave it empty and put your questions in
   `open_questions`; then nothing is saved until the user answers.
+- Fiber, sugar and sodium are optional: pass them when they were calculated or you can
+  estimate them, otherwise leave them out (never ask the user for them). The same rules
+  apply: values you estimate are listed in `estimated_fields` with
+  source="from_conversation".
 
 Handling the result:
 - Always give your normal answer first, including any estimate you can make, then the
@@ -75,6 +86,7 @@ FIELD_LABELS: dict[NutrientField, str] = {
     "fat_g": "fat",
     "carbohydrates_g": "carbohydrates",
 }
+MAX_FIBER_OR_SUGAR_G = MAX_MACRONUTRIENT_G
 
 
 class SavedMeal(BaseModel):
@@ -88,7 +100,10 @@ class SavedMeal(BaseModel):
     protein_g: float
     fat_g: float
     carbohydrates_g: float
-    estimated_fields: list[NutrientField] = Field(
+    fiber_g: float | None
+    sugar_g: float | None
+    sodium_mg: float | None
+    estimated_fields: list[TrackedNutrientField] = Field(
         description="Values estimated by the assistant rather than taken from the user's workflow"
     )
     confidence: Confidence
@@ -122,9 +137,10 @@ def _saved_message(meal: MealEstimate, *, refinable: bool = False) -> str:
         f"(protein {meal.protein_g:g} g, fat {meal.fat_g:g} g, "
         f"carbohydrates {meal.carbohydrates_g:g} g)"
     )
-    # Only call out estimates that complete someone else's calculation.
-    if meal.source == "from_conversation" and meal.estimated_fields:
-        labels = [FIELD_LABELS[name] for name in meal.estimated_fields]
+    # Only call out estimates that complete someone else's calculation, for the values shown.
+    shown = [name for name in NUTRIENT_FIELDS if name in meal.estimated_fields]
+    if meal.source == "from_conversation" and shown:
+        labels = [FIELD_LABELS[name] for name in shown]
         message += f"; {', '.join(labels)} estimated by the assistant"
     message += "."
     if refinable:
@@ -144,6 +160,9 @@ def _saved_meal(row: Meal) -> SavedMeal:
         protein_g=row.protein_g,
         fat_g=row.fat_g,
         carbohydrates_g=row.carbohydrates_g,
+        fiber_g=row.fiber_g,
+        sugar_g=row.sugar_g,
+        sodium_mg=row.sodium_mg,
         estimated_fields=row.estimated_fields,
         confidence=row.confidence,
     )
@@ -180,7 +199,7 @@ def register(mcp: FastMCP, db: Database) -> None:
             ),
         ],
         estimated_fields: Annotated[
-            list[NutrientField] | None,
+            list[TrackedNutrientField] | None,
             Field(
                 description=(
                     "With source='from_conversation': the values you estimated yourself "
@@ -230,6 +249,28 @@ def register(mcp: FastMCP, db: Database) -> None:
                 ge=0, le=MAX_MACRONUTRIENT_G, description="Carbohydrates in the whole portion, g"
             ),
         ] = None,
+        fiber_g: Annotated[
+            float | None,
+            Field(
+                ge=0, le=MAX_FIBER_OR_SUGAR_G, description="Optional: fiber in the whole portion, g"
+            ),
+        ] = None,
+        sugar_g: Annotated[
+            float | None,
+            Field(
+                ge=0,
+                le=MAX_FIBER_OR_SUGAR_G,
+                description="Optional: sugars in the whole portion, g (part of the carbohydrates)",
+            ),
+        ] = None,
+        sodium_mg: Annotated[
+            float | None,
+            Field(
+                ge=0,
+                le=MAX_SODIUM_MG,
+                description="Optional: sodium in the whole portion, mg (not salt: salt is 2.5x)",
+            ),
+        ] = None,
         eaten_at: Annotated[
             datetime | None,
             Field(
@@ -263,6 +304,9 @@ def register(mcp: FastMCP, db: Database) -> None:
                 protein_g=protein_g,
                 fat_g=fat_g,
                 carbohydrates_g=carbohydrates_g,
+                fiber_g=fiber_g,
+                sugar_g=sugar_g,
+                sodium_mg=sodium_mg,
                 estimated_fields=tuple(estimated_fields or ()),
                 confidence=confidence,
                 eaten_at=eaten_at,

@@ -11,9 +11,11 @@ from healthy_eating.db.base import utcnow
 from healthy_eating.db.models import Meal, OAuthClient
 from healthy_eating.nutrition.types import (
     NUTRIENT_FIELDS,
+    TRACKED_NUTRIENT_FIELDS,
     Confidence,
     MealSource,
     NutrientField,
+    TrackedNutrientField,
 )
 from healthy_eating.services.local_time import (
     local_date_column,
@@ -35,6 +37,7 @@ MAX_DESCRIPTION_LENGTH = 1000
 MAX_PORTION_GRAMS = 5000
 MAX_CALORIES_KCAL = 10000
 MAX_MACRONUTRIENT_G = 1000
+MAX_SODIUM_MG = 20000
 
 # Stated calories and calories derived from macros may differ by this much before we warn.
 ENERGY_TOLERANCE_RATIO = 0.2
@@ -65,8 +68,12 @@ class MealEstimate:
     protein_g: float | None = None
     fat_g: float | None = None
     carbohydrates_g: float | None = None
+    # Optional values; None when not known.
+    fiber_g: float | None = None
+    sugar_g: float | None = None
+    sodium_mg: float | None = None
     # Values the assistant estimated itself, as opposed to values from the user's workflow.
-    estimated_fields: tuple[NutrientField, ...] = ()
+    estimated_fields: tuple[TrackedNutrientField, ...] = ()
     confidence: Confidence = "medium"
     eaten_at: datetime | None = None
     replaces_meal_id: uuid.UUID | None = None
@@ -116,9 +123,9 @@ def evaluate_meal(estimate: MealEstimate) -> MealEvaluation:
         warnings.append("Calories were derived from the macronutrients (4/9/4 kcal per g).")
 
     if meal.source == "estimated_by_assistant":
-        estimated: tuple[NutrientField, ...] = NUTRIENT_FIELDS
+        estimated: tuple[TrackedNutrientField, ...] = TRACKED_NUTRIENT_FIELDS
     else:
-        estimated = tuple(name for name in NUTRIENT_FIELDS if name in meal.estimated_fields)
+        estimated = tuple(name for name in TRACKED_NUTRIENT_FIELDS if name in meal.estimated_fields)
     meal = replace(
         meal,
         estimated_fields=tuple(name for name in estimated if getattr(meal, name) is not None),
@@ -139,6 +146,7 @@ def evaluate_meal(estimate: MealEstimate) -> MealEvaluation:
     # Derived calories match the macronutrients by definition; only check stated calories.
     if not missing and estimate.calories_kcal is not None:
         warnings.extend(_energy_mismatch(meal))
+    warnings.extend(sugar_above_carbohydrates(meal.sugar_g, meal.carbohydrates_g))
 
     return MealEvaluation(
         complete=not missing,
@@ -173,6 +181,13 @@ def energy_mismatch(
     ]
 
 
+def sugar_above_carbohydrates(sugar_g: float | None, carbohydrates_g: float | None) -> list[str]:
+    """A warning (not an error): sugars are part of the carbohydrates, so never more."""
+    if sugar_g is None or carbohydrates_g is None or sugar_g <= carbohydrates_g:
+        return []
+    return [f"Sugar ({sugar_g:g} g) is higher than the carbohydrates ({carbohydrates_g:g} g)."]
+
+
 class MealNotFoundError(Exception):
     """The meal to correct does not exist or belongs to another user."""
 
@@ -198,6 +213,9 @@ async def save_meal(
         "protein_g": meal.protein_g,
         "fat_g": meal.fat_g,
         "carbohydrates_g": meal.carbohydrates_g,
+        "fiber_g": meal.fiber_g,
+        "sugar_g": meal.sugar_g,
+        "sodium_mg": meal.sodium_mg,
         "estimated_fields": list(meal.estimated_fields),
         "confidence": meal.confidence,
     }
@@ -330,6 +348,10 @@ class MealEdit:
     protein_g: float | Unset = UNSET
     fat_g: float | Unset = UNSET
     carbohydrates_g: float | Unset = UNSET
+    # None removes the value.
+    fiber_g: float | Unset | None = UNSET
+    sugar_g: float | Unset | None = UNSET
+    sodium_mg: float | Unset | None = UNSET
     # A time without an offset is read in the user's time zone, as in log_meal.
     eaten_at: datetime | Unset = UNSET
 
@@ -364,8 +386,8 @@ async def edit_meal(
             edit.eaten_at, time_zone, now=utcnow()
         )
 
-    changed: list[NutrientField] = []
-    for name in NUTRIENT_FIELDS:
+    changed: list[TrackedNutrientField] = []
+    for name in TRACKED_NUTRIENT_FIELDS:
         value = getattr(edit, name)
         if not isinstance(value, Unset) and value != getattr(meal, name):
             setattr(meal, name, value)
@@ -375,10 +397,12 @@ async def edit_meal(
 
     await session.flush()
     warnings = []
-    if changed:
+    if any(name in NUTRIENT_FIELDS for name in changed):
         warnings = energy_mismatch(
             meal.calories_kcal, meal.protein_g, meal.fat_g, meal.carbohydrates_g
         )
+    if changed:
+        warnings.extend(sugar_above_carbohydrates(meal.sugar_g, meal.carbohydrates_g))
     client_name = None
     if meal.client_id is not None:
         client_name = await session.scalar(

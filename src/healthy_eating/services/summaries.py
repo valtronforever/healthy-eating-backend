@@ -9,7 +9,12 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from healthy_eating.db.models import Meal
-from healthy_eating.nutrition.types import DayStatus, StatusSetter
+from healthy_eating.nutrition.types import (
+    OPTIONAL_NUTRIENT_FIELDS,
+    DayStatus,
+    OptionalNutrientField,
+    StatusSetter,
+)
 from healthy_eating.services.days import counts_complete_days_only, day_counts, day_statuses
 from healthy_eating.services.local_time import local_date_column, utc_window
 from healthy_eating.services.settings import get_time_zone
@@ -22,6 +27,14 @@ CountingRule = Literal["complete_days", "logged_days"]
 
 class RangeTooLongError(ValueError):
     """More days were requested than MAX_SUMMARY_DAYS."""
+
+
+@dataclass(frozen=True)
+class NutrientTotal:
+    """An optional nutrient's day total over the meals that have a value for it."""
+
+    amount: float
+    meal_count: int
 
 
 @dataclass(frozen=True)
@@ -40,6 +53,8 @@ class DaySummary:
     status_set_by: StatusSetter | None
     # Whether the day counts for averages (services/days.py).
     counted: bool
+    # Fiber, sugar and sodium; a nutrient is missing when no meal of the day has a value.
+    optional: dict[OptionalNutrientField, NutrientTotal]
 
 
 @dataclass(frozen=True)
@@ -56,9 +71,10 @@ class _Totals:
     fat_g: float
     carbohydrates_g: float
     estimated_kcal: float
+    optional: dict[OptionalNutrientField, NutrientTotal]
 
 
-_NO_MEALS = _Totals(0, 0.0, 0.0, 0.0, 0.0, 0.0)
+_NO_MEALS = _Totals(0, 0.0, 0.0, 0.0, 0.0, 0.0, {})
 
 
 async def _totals_by_day(
@@ -79,6 +95,9 @@ async def _totals_by_day(
             func.sum(Meal.fat_g),
             func.sum(Meal.carbohydrates_g),
             func.sum(estimated_kcal),
+            *(func.sum(getattr(Meal, name)) for name in OPTIONAL_NUTRIENT_FIELDS),
+            # COUNT of a column skips NULL: the meals that have a value.
+            *(func.count(getattr(Meal, name)) for name in OPTIONAL_NUTRIENT_FIELDS),
         )
         .where(
             Meal.user_id == user_id,
@@ -89,10 +108,17 @@ async def _totals_by_day(
         )
         .group_by(local_date)
     )
-    return {
-        day: _Totals(count, kcal, protein, fat, carbs, estimated)
-        for day, count, kcal, protein, fat, carbs, estimated in rows
-    }
+    totals = {}
+    width = len(OPTIONAL_NUTRIENT_FIELDS)
+    for day, count, kcal, protein, fat, carbs, estimated, *more in rows:
+        amounts, counts = more[:width], more[width:]
+        optional = {
+            name: NutrientTotal(amount=round(amount, 1), meal_count=meals)
+            for name, amount, meals in zip(OPTIONAL_NUTRIENT_FIELDS, amounts, counts, strict=True)
+            if meals
+        }
+        totals[day] = _Totals(count, kcal, protein, fat, carbs, estimated, optional)
+    return totals
 
 
 async def daily_summaries(
@@ -132,6 +158,7 @@ async def daily_summaries(
                     total.meal_count,
                     complete_days_only=complete_days_only,
                 ),
+                optional=total.optional,
             )
         )
     return DailySummaries(
