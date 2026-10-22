@@ -15,6 +15,8 @@ from evals.scenarios import confirms_saved, reports_not_saved
         ("Saved to HealthyEating: Salmon, 610 kcal (protein 42 g, fat 28 g).", True, False),
         ("Updated to 3 slices.\nSaved the correction to HealthyEating.", True, False),
         ("Updated in HealthyEating: pizza, 855 kcal.", True, False),
+        # A decimal point does not end the sentence.
+        ("Saved 177.4 lb to HealthyEating.", True, False),
         ("Was the drink part of it?\n\nNot saved to HealthyEating yet.", False, True),
         ("I couldn't save this to HealthyEating because of a server error.", False, True),
         ("The meal wasn't saved to HealthyEating: 503 Service Unavailable.", False, True),

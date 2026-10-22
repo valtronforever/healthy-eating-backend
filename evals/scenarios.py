@@ -24,7 +24,8 @@ NEGATIVE = re.compile(
     r"\b(not|never|unable|failed|couldn['\u2019]?t|wasn['\u2019]?t|didn['\u2019]?t|isn['\u2019]?t)\b",
     re.IGNORECASE,
 )
-SENTENCE = re.compile(r"[^.!?\n]+")
+# A sentence ends at . ! ? or a line break, but not at a decimal point ("177.4 lb").
+SENTENCE = re.compile(r"(?:[^.!?\n]|(?<=\d)\.(?=\d))+")
 
 
 def _healthy_eating_sentences(reply: str) -> list[str]:
@@ -153,6 +154,11 @@ async def numbers_from_conversation(
             set(added) <= set(meal.estimated_fields),
             f"added {added}, estimated {meal.estimated_fields}",
         )
+    checks.require(
+        "never asks for the user's weight",
+        not WEIGHT_QUESTION.search(turn.reply),
+        turn.reply[-300:],
+    )
     _require_confirmation(env, checks, turn.reply)
 
 
@@ -478,6 +484,49 @@ async def calm_mode_targets(env: EvalEnvironment, checks: Checks, turns: list[Tu
     checks.note("reply does not mention calories", not CALORIES.search(turn.reply), turn.reply)
 
 
+# The assistant never asks for weight: a question that mentions weighing or weight.
+WEIGHT_QUESTION = re.compile(r"\b(weigh|weight)\b[^.!?\n]*\?", re.IGNORECASE)
+
+
+async def weight_logged(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    turn = await env.chat(CHAT.name, "I weighed 80.4 kg this morning.")
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    weights = await env.weights()
+    checks.require(
+        "exactly one weigh-in of 80.4 kg saved",
+        [w.weight_kg for w in weights] == [80.4],
+        str([(w.weight_kg, w.measured_at) for w in weights]),
+    )
+    assert env.proxy is not None
+    meals = env.proxy.tool_calls("log_meal")
+    checks.require("no meal logged", not meals, str([c.arguments for c in meals]))
+    checks.require("user told it was saved", confirms_saved(turn.reply), turn.reply[-300:])
+    checks.require("no judgment of the weight", not JUDGMENT.search(turn.reply), turn.reply[-300:])
+    calls = env.proxy.tool_calls("log_weight")
+    checks.note(
+        "measured_at given for 'this morning'",
+        bool(calls) and calls[-1].arguments.get("measured_at") is not None,
+        str([c.arguments for c in calls]),
+    )
+
+
+async def weight_in_pounds(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    turn = await env.chat(CHAT.name, "Scale says 177.4 lb today. Please save it.")
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    weights = await env.weights()
+    checks.require(
+        "one weigh-in of 177.4 lb (80.47 kg) saved",
+        len(weights) == 1 and abs(weights[0].weight_kg - 80.47) <= 0.05,
+        str([w.weight_kg for w in weights]),
+    )
+    checks.require("user told it was saved", confirms_saved(turn.reply), turn.reply[-300:])
+    checks.require("no judgment of the weight", not JUDGMENT.search(turn.reply), turn.reply[-300:])
+
+
 async def what_did_i_eat(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
     await env.add_meal("Oatmeal with berries", (350, 12, 8, 55), minutes_ago=120)
     await env.add_meal("Chicken salad", (480, 35, 30, 18), minutes_ago=30)
@@ -646,6 +695,16 @@ SCENARIOS = [
         "calm_mode_targets",
         "Calm mode: a calorie and a protein target; protein saved, the calorie target unchanged",
         calm_mode_targets,
+    ),
+    Scenario(
+        "weight_logged",
+        "The user gives their weight in kg: one weigh-in saved, confirmed neutrally",
+        weight_logged,
+    ),
+    Scenario(
+        "weight_in_pounds",
+        "The user gives their weight in lb: stored in kg, confirmed neutrally",
+        weight_in_pounds,
     ),
     Scenario(
         "what_did_i_eat",

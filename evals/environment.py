@@ -39,7 +39,14 @@ from evals.proxy import McpProxy
 from healthy_eating.auth.tokens import generate_token, hash_token
 from healthy_eating.db import Base, Database
 from healthy_eating.db.base import utcnow
-from healthy_eating.db.models import AccessTokenRecord, DayStatusRecord, Meal, OAuthClient, User
+from healthy_eating.db.models import (
+    AccessTokenRecord,
+    DayStatusRecord,
+    Meal,
+    OAuthClient,
+    User,
+    WeightEntry,
+)
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, NutrientField
 from healthy_eating.services.settings import (
     SettingsChanges,
@@ -165,6 +172,7 @@ class EvalEnvironment:
         """Forget everything from the previous scenario run."""
         async with self.db.session() as session:
             await session.execute(text("DELETE FROM meals"))
+            await session.execute(text("DELETE FROM weights"))
             await session.execute(text("UPDATE users SET timezone = NULL"))
             await session.execute(
                 update(User).values(
@@ -173,7 +181,7 @@ class EvalEnvironment:
                         for name in NUTRIENT_FIELDS
                         for bound in ("min", "max")
                     }
-                    | {"calm_mode": False}
+                    | {"calm_mode": False, "weight_tracking": False}
                 )
             )
             await session.execute(text("DELETE FROM day_statuses"))
@@ -236,6 +244,11 @@ class EvalEnvironment:
     async def meals(self) -> list[Meal]:
         async with self.db.session() as session:
             rows = await session.scalars(select(Meal).order_by(Meal.created_at))
+            return list(rows)
+
+    async def weights(self) -> list[WeightEntry]:
+        async with self.db.session() as session:
+            rows = await session.scalars(select(WeightEntry).order_by(WeightEntry.created_at))
             return list(rows)
 
     async def time_zone(self) -> str | None:

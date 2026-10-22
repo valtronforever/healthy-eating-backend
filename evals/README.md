@@ -48,7 +48,7 @@ second run's reset breaks the first (seen as a failed run and an opencode warm-u
      model only has the apps that persona has connected.
 5. Sends a warm-up message until both MCP servers are connected (opencode connects them on
    first use; without the warm-up the first message would reach the model without tools).
-6. For each scenario run: clears the meals, the sheet and the proxy log, talks to the model
+6. For each scenario run: clears the meals, weigh-ins, the sheet and the proxy log, talks to the model
    with `opencode run --server ... --format json` (multi-turn via `--session`), then checks
    the database, the recorded tool calls and the reply.
 
@@ -56,7 +56,7 @@ second run's reset breaks the first (seen as a failed run and an opencode warm-u
 
 | Scenario | What must happen |
 |---|---|
-| `numbers_from_conversation` | Numbers the user calculated are stored unchanged, `source=from_conversation`, nothing marked estimated, user told it was saved |
+| `numbers_from_conversation` | Numbers the user calculated are stored unchanged, `source=from_conversation`, none of them marked estimated (added fiber, sugar or sodium must be), user told it was saved, no question about weight |
 | `photo` | Meal photo (`fixtures/breakfast.jpg`): the reply includes an estimate; if the assistant asks a follow-up, the eval answers it; one meal saved with `estimated_by_assistant` and plausible values |
 | `existing_workflow` | "Calorie project" persona: answer keeps the project's format, the Sheets row is still added (not after HealthyEating), the same numbers reach HealthyEating |
 | `missing_portion` | "I just had some soup": a follow-up question (a rough estimate may be saved right away); after the answer exactly one meal, updated in place, and no new question |
@@ -68,6 +68,8 @@ second run's reset breaks the first (seen as a failed run and an opencode warm-u
 | `calm_mode_targets` | Calm mode on with a stored calorie range; the user asks for a calorie and a protein range: protein stored, calorie range unchanged, the user is told it was saved (note: the reply does not mention calories) |
 | `single_number_target` | "My calorie target: 2000 kcal a day": nothing stored, the assistant asks for a range, no judgment |
 | `day_complete` | Meal with numbers plus "That's all I'm eating today": one meal saved and today marked complete by the assistant, without asking |
+| `weight_logged` | "I weighed 80.4 kg this morning": exactly one weigh-in of 80.4 kg, no meal, the user is told it was saved, no judgment (note: `measured_at` given) |
+| `weight_in_pounds` | "Scale says 177.4 lb": one weigh-in of about 80.47 kg, the user is told it was saved, no judgment |
 | `what_did_i_eat` | Two meals already saved today: the assistant reads them (`get_daily_summary` or `list_meals`), gives the 830 kcal total, logs and deletes nothing, and makes no judgment about the intake |
 | `delete_duplicate` | The same oatmeal saved twice: `delete_meal` is called once, one copy remains, the user is told it was removed |
 | `not_food` | A nutrition question that is not a meal logs nothing |
