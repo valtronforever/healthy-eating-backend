@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, Self
 
 import httpx
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -40,6 +40,13 @@ from healthy_eating.auth.tokens import generate_token, hash_token
 from healthy_eating.db import Base, Database
 from healthy_eating.db.base import utcnow
 from healthy_eating.db.models import AccessTokenRecord, DayStatusRecord, Meal, OAuthClient, User
+from healthy_eating.nutrition.types import NUTRIENT_FIELDS, NutrientField
+from healthy_eating.services.settings import (
+    SettingsChanges,
+    TargetRange,
+    get_settings,
+    update_settings,
+)
 
 EVALS_DIR = Path(__file__).resolve().parent
 FIXTURES_DIR = EVALS_DIR / "fixtures"
@@ -159,6 +166,16 @@ class EvalEnvironment:
         async with self.db.session() as session:
             await session.execute(text("DELETE FROM meals"))
             await session.execute(text("UPDATE users SET timezone = NULL"))
+            await session.execute(
+                update(User).values(
+                    {
+                        f"target_{name}_{bound}": None
+                        for name in NUTRIENT_FIELDS
+                        for bound in ("min", "max")
+                    }
+                    | {"calm_mode": False}
+                )
+            )
             await session.execute(text("DELETE FROM day_statuses"))
         self.sheets_log.unlink(missing_ok=True)
         assert self.proxy is not None
@@ -228,6 +245,20 @@ class EvalEnvironment:
                 select(User.timezone).where(User.id == self.user_id)
             )
             return time_zone
+
+    async def targets(self) -> dict[NutrientField, TargetRange | None]:
+        """The daily targets stored for the eval user."""
+        assert self.user_id is not None
+        async with self.db.session() as session:
+            settings = await get_settings(session, self.user_id)
+        assert settings is not None
+        return settings.targets
+
+    async def change_settings(self, changes: SettingsChanges) -> None:
+        """Change the eval user's settings directly, as if they had done it in the app."""
+        assert self.user_id is not None
+        async with self.db.session() as session:
+            await update_settings(session, self.user_id, changes)
 
     async def add_meal(
         self,

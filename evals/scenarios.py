@@ -16,6 +16,7 @@ from evals.personas import CALORIE_PROJECT, CHAT
 from healthy_eating.db.base import utcnow
 from healthy_eating.db.models import Meal
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, OPTIONAL_NUTRIENT_FIELDS
+from healthy_eating.services.settings import SettingsChanges, TargetRange
 
 HEALTHY_EATING = re.compile(r"healthy ?eating", re.IGNORECASE)
 POSITIVE = re.compile(r"\b(saved|updated|logged|recorded|added)\b", re.IGNORECASE)
@@ -403,6 +404,80 @@ JUDGMENT = re.compile(
 )
 
 
+async def targets(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    turn = await env.chat(
+        CHAT.name,
+        "From now on my daily targets are 1800 to 2100 kcal and at least 120 g protein.",
+    )
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    stored = await env.targets()
+    checks.require(
+        "calorie target stored as 1800 to 2100 kcal",
+        stored["calories_kcal"] == TargetRange(min=1800, max=2100),
+        str(stored),
+    )
+    checks.require(
+        "protein target stored as at least 120 g",
+        stored["protein_g"] == TargetRange(min=120, max=None),
+        str(stored),
+    )
+    checks.require(
+        "no other target set",
+        stored["fat_g"] is None and stored["carbohydrates_g"] is None,
+        str(stored),
+    )
+    assert env.proxy is not None
+    meals = env.proxy.tool_calls("log_meal")
+    checks.require("no meal logged", not meals, str([c.arguments for c in meals]))
+    checks.require(
+        "user told the targets were saved", confirms_saved(turn.reply), turn.reply[-300:]
+    )
+    checks.require("no judgment of the targets", not JUDGMENT.search(turn.reply), turn.reply[-300:])
+
+
+async def single_number_target(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    turn = await env.chat(CHAT.name, "Please save my calorie target: 2000 kcal a day.")
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    stored = await env.targets()
+    checks.require("no target stored", all(t is None for t in stored.values()), str(stored))
+    checks.require(
+        "asks the user for a range",
+        "?" in turn.reply and bool(re.search(r"range|at least|at most|between", turn.reply, re.I)),
+        turn.reply[-300:],
+    )
+    checks.require("no judgment of the target", not JUDGMENT.search(turn.reply), turn.reply[-300:])
+
+
+CALORIES = re.compile(r"kcal|calorie|\bkj\b|kilojoule", re.IGNORECASE)
+
+
+async def calm_mode_targets(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    calories = TargetRange(min=1800, max=2200)
+    await env.change_settings(SettingsChanges(calm_mode=True, targets={"calories_kcal": calories}))
+    turn = await env.chat(
+        CHAT.name,
+        "Please save my new daily targets: 1900 to 2300 kcal and 100 to 140 g protein.",
+    )
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    stored = await env.targets()
+    checks.require(
+        "protein target stored as 100 to 140 g",
+        stored["protein_g"] == TargetRange(min=100, max=140),
+        str(stored),
+    )
+    checks.require("calorie target unchanged", stored["calories_kcal"] == calories, str(stored))
+    checks.require(
+        "user told the targets were saved", confirms_saved(turn.reply), turn.reply[-300:]
+    )
+    checks.note("reply does not mention calories", not CALORIES.search(turn.reply), turn.reply)
+
+
 async def what_did_i_eat(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
     await env.add_meal("Oatmeal with berries", (350, 12, 8, 55), minutes_ago=120)
     await env.add_meal("Chicken salad", (480, 35, 30, 18), minutes_ago=30)
@@ -556,6 +631,21 @@ SCENARIOS = [
         "day_complete",
         "The user says they are done for the day: meal saved and today marked complete",
         day_complete,
+    ),
+    Scenario(
+        "targets",
+        "The user states daily targets as ranges: they are stored and the user told so",
+        targets,
+    ),
+    Scenario(
+        "single_number_target",
+        "A single-number target: nothing stored, the assistant asks for a range",
+        single_number_target,
+    ),
+    Scenario(
+        "calm_mode_targets",
+        "Calm mode: a calorie and a protein target; protein saved, the calorie target unchanged",
+        calm_mode_targets,
     ),
     Scenario(
         "what_did_i_eat",
