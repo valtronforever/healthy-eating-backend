@@ -8,15 +8,15 @@ from pydantic import BaseModel, Field
 from healthy_eating.db import Database
 from healthy_eating.mcp_server.context import current_user_id
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, EnergyUnit, NutrientField
-from healthy_eating.services import settings as settings_service
 from healthy_eating.services.settings import (
     InvalidSettingsError,
     SettingsChanges,
-    UserSettings,
     get_settings,
     set_targets_from_chat,
     update_settings,
+    visible_targets,
 )
+from healthy_eating.services.settings import TargetRange as ServiceTargetRange
 from healthy_eating.services.users import get_user
 
 SET_TIMEZONE_DESCRIPTION = """\
@@ -39,8 +39,9 @@ Targets are ranges, never limits or single numbers: give min, max or both. When 
 names a single number (for example "2000 kcal a day"), do not call this tool yet; ask which
 range they want, such as from-to, at least or at most.
 Targets you leave out stay as they are; put a target in `clear` to remove it.
-When get_profile shows calm_mode, do not bring up calories or a calorie target: Calm mode
-hides them, so this tool does not change the calorie target then.
+When get_profile shows calm_mode, do not bring up calories or a calorie target, and leave
+calories_kcal out of this call (a call with it is rejected): Calm mode hides calories, so
+save only the other targets.
 """
 
 
@@ -69,15 +70,16 @@ class Profile(BaseModel):
     )
     targets: dict[NutrientField, TargetRange | None] = Field(
         description=(
-            "Daily target ranges the user set, in kcal and g; null if none. Targets are "
-            "ranges, never limits: being over or under is not good or bad"
+            "Daily target ranges the user set, in kcal and g; null if none. Without "
+            "calories_kcal in Calm mode. Targets are ranges, never limits: being over or "
+            "under is not good or bad"
         )
     )
 
 
 class TargetRangeInput(BaseModel):
-    min: float | None = Field(default=None, ge=0, description="Lower bound; omit if open")
-    max: float | None = Field(default=None, ge=0, description="Upper bound; omit if open")
+    min: float | None = Field(default=None, description="Lower bound; omit if open")
+    max: float | None = Field(default=None, description="Upper bound; omit if open")
 
 
 class SetTargetsResult(BaseModel):
@@ -99,14 +101,20 @@ TARGET_LABELS: dict[NutrientField, str] = {
 }
 
 
+def _number(value: float) -> str:
+    # At most one decimal and never scientific notation: "2100", "250.5", "2000000".
+    rounded = round(value, 1)
+    return str(int(rounded)) if rounded.is_integer() else str(rounded)
+
+
 def _amount(value: float, unit: str) -> str:
-    return f"{value:g} {unit}"
+    return f"{_number(value)} {unit}"
 
 
-def _describe_target(name: NutrientField, target: settings_service.TargetRange) -> str:
+def _describe_target(name: NutrientField, target: ServiceTargetRange) -> str:
     unit = "kcal" if name == "calories_kcal" else "g"
     if target.min is not None and target.max is not None:
-        text = f"{target.min:g} to {_amount(target.max, unit)}"
+        text = f"{_number(target.min)} to {_amount(target.max, unit)}"
     elif target.min is not None:
         text = f"from {_amount(target.min, unit)}"
     else:
@@ -117,23 +125,32 @@ def _describe_target(name: NutrientField, target: settings_service.TargetRange) 
 
 
 def _targets_message(
-    changed: dict[NutrientField, settings_service.TargetRange | None],
+    targets: dict[NutrientField, ServiceTargetRange], clear: list[NutrientField]
 ) -> str:
     parts = [
-        f"no {TARGET_LABELS[name]} target" if target is None else _describe_target(name, target)
+        _describe_target(name, targets[name])
+        if name in targets
+        else f"no {TARGET_LABELS[name]} target"
         for name in NUTRIENT_FIELDS
-        if name in changed
-        for target in (changed[name],)
+        if name in targets or name in clear
     ]
     return f"Saved targets to HealthyEating: {', '.join(parts)}."
 
 
-def _shown_targets(settings: UserSettings) -> dict[NutrientField, TargetRange | None]:
+def _shown_targets(
+    targets: dict[NutrientField, ServiceTargetRange | None],
+) -> dict[NutrientField, TargetRange | None]:
     return {
         name: None if target is None else TargetRange(min=target.min, max=target.max)
-        for name, target in settings.targets.items()
-        if not (settings.calm_mode and name == "calories_kcal")
+        for name, target in targets.items()
     }
+
+
+def _target(nutrient: str, unit: str) -> str:
+    return (
+        f"Daily {nutrient} range in {unit}. Omit it (or send null) to leave it unchanged; "
+        "to remove it, list it in clear"
+    )
 
 
 class SetTimezoneResult(BaseModel):
@@ -159,10 +176,7 @@ def register(mcp: FastMCP, db: Database) -> None:
             timezone=settings.timezone,
             energy_unit=settings.energy_unit,
             calm_mode=settings.calm_mode,
-            targets={
-                name: None if target is None else TargetRange(min=target.min, max=target.max)
-                for name, target in settings.targets.items()
-            },
+            targets=_shown_targets(visible_targets(settings)),
         )
 
     @mcp.tool(
@@ -212,14 +226,14 @@ def register(mcp: FastMCP, db: Database) -> None:
     )
     async def set_targets(
         calories_kcal: Annotated[
-            TargetRangeInput | None, Field(description="Daily energy range in kcal")
+            TargetRangeInput | None, Field(description=_target("energy", "kcal"))
         ] = None,
         protein_g: Annotated[
-            TargetRangeInput | None, Field(description="Daily protein range in g")
+            TargetRangeInput | None, Field(description=_target("protein", "g"))
         ] = None,
-        fat_g: Annotated[TargetRangeInput | None, Field(description="Daily fat range in g")] = None,
+        fat_g: Annotated[TargetRangeInput | None, Field(description=_target("fat", "g"))] = None,
         carbohydrates_g: Annotated[
-            TargetRangeInput | None, Field(description="Daily carbohydrate range in g")
+            TargetRangeInput | None, Field(description=_target("carbohydrate", "g"))
         ] = None,
         clear: Annotated[
             list[NutrientField] | None,
@@ -232,27 +246,21 @@ def register(mcp: FastMCP, db: Database) -> None:
             "fat_g": fat_g,
             "carbohydrates_g": carbohydrates_g,
         }
-        changed: dict[NutrientField, settings_service.TargetRange | None] = {
-            name: settings_service.TargetRange(min=target.min, max=target.max)
+        targets = {
+            name: ServiceTargetRange(min=target.min, max=target.max)
             for name, target in given.items()
             if target is not None
         }
-        clear = clear or []
-        both = sorted(set(changed) & set(clear))
-        if both:
-            raise ToolError(
-                f"Targets not saved to HealthyEating: {', '.join(both)} is both set and cleared"
-            )
-        changed |= {name: None for name in clear}
+        clear = list(dict.fromkeys(clear or []))
         try:
             async with db.session() as session:
-                settings = await set_targets_from_chat(session, current_user_id(), changed)
+                settings = await set_targets_from_chat(session, current_user_id(), targets, clear)
         except InvalidSettingsError as error:
             raise ToolError(f"Targets not saved to HealthyEating: {error}") from None
         if settings is None:
             raise ToolError("User not found")
         return SetTargetsResult(
             saved_to_healthy_eating=True,
-            user_message=_targets_message(changed),
-            targets=_shown_targets(settings),
+            user_message=_targets_message(targets, clear),
+            targets=_shown_targets(visible_targets(settings)),
         )

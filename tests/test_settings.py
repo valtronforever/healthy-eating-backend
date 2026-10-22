@@ -211,6 +211,9 @@ async def test_set_targets_clears_only_the_listed_targets(
     ("arguments", "message"),
     [
         ({"calories_kcal": {"min": 2000, "max": 2000}}, "never a single number"),
+        # Shown to the user as "2000 to 2000 kcal", so it is a single number too.
+        ({"calories_kcal": {"min": 2000, "max": 2000.01}}, "never a single number"),
+        ({"protein_g": {"min": -5}}, "cannot be negative"),
         ({"protein_g": {}}, "needs a lower bound, an upper bound or both"),
         ({"fat_g": {"min": 80, "max": 50}}, "cannot exceed the upper bound"),
         ({"fat_g": {"min": 50}, "clear": ["fat_g"]}, "both set and cleared"),
@@ -233,15 +236,22 @@ async def test_set_targets_rejects_invalid_targets_and_saves_nothing(
     assert await stored_targets(http, token) == NO_TARGETS
 
 
-async def test_set_targets_rejects_negative_bounds(
+async def test_set_targets_rounds_the_message_and_ignores_null(
     app: FastAPI, http: httpx.AsyncClient, token: str
 ) -> None:
+    await patch(http, token, {"targets": {"fat_g": {"min": 50, "max": 80}}})
     async with mcp_client(app, token) as mcp:
         result = await mcp.call_tool(
-            "set_targets", {"protein_g": {"min": -5}}, raise_on_error=False
+            "set_targets",
+            {"calories_kcal": {"min": 1850.125, "max": 2000000}, "fat_g": None},
         )
-    assert result.is_error
-    assert await stored_targets(http, token) == NO_TARGETS
+    assert result.structured_content is not None
+    assert result.structured_content["user_message"] == (
+        "Saved targets to HealthyEating: 1850.1 to 2000000 kcal."
+    )
+    stored = await stored_targets(http, token)
+    assert stored["calories_kcal"] == {"min": 1850.125, "max": 2000000}
+    assert stored["fat_g"] == {"min": 50, "max": 80}
 
 
 async def test_set_targets_in_calm_mode_leaves_calories_alone(
@@ -253,18 +263,22 @@ async def test_set_targets_in_calm_mode_leaves_calories_alone(
         profile = await mcp.call_tool("get_profile", {})
         set_calories = await mcp.call_tool(
             "set_targets",
-            {"calories_kcal": {"min": 1900, "max": 2300}, "protein_g": {"min": 120}},
+            {"calories_kcal": {"min": 1900, "max": 2300}, "protein_g": {"min": 90}},
             raise_on_error=False,
         )
         clear_calories = await mcp.call_tool(
             "set_targets", {"clear": ["calories_kcal"]}, raise_on_error=False
         )
+        # Nothing of a rejected call is saved, not even the protein target.
+        assert await stored_targets(http, token) == NO_TARGETS | {"calories_kcal": calories}
         macros = await mcp.call_tool("set_targets", {"protein_g": {"min": 120}})
     assert profile.structured_content is not None
     assert profile.structured_content["calm_mode"] is True
+    assert "calories_kcal" not in profile.structured_content["targets"]
     for rejected in (set_calories, clear_calories):
         assert rejected.is_error
         assert "Calm mode is on" in str(rejected.content)
+        assert "without calories_kcal" in str(rejected.content)
     assert macros.structured_content is not None
     assert macros.structured_content["user_message"] == (
         "Saved targets to HealthyEating: protein from 120 g."
