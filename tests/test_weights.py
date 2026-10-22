@@ -176,6 +176,43 @@ async def test_delete_all_weight_data_keeps_the_setting(http: httpx.AsyncClient)
     assert (await settings(http, owner))["weight_tracking"] is True
 
 
+async def test_samples_deleted_in_apple_health_are_deleted_here(
+    http: httpx.AsyncClient,
+) -> None:
+    owner = await account(http, "cal@example.com")
+    other = await account(http, "dee@example.com")
+    for user in (owner, other):
+        await http.patch(
+            "/api/v1/me/settings", json={"weight_tracking": True}, headers=user.headers
+        )
+        samples = [
+            {"weight_kg": 85.0, "source": "apple_health", "external_id": "hk-a"},
+            {"weight_kg": 84.0, "source": "apple_health", "external_id": "hk-b"},
+        ]
+        assert (await add(http, user, samples)).status_code == 201
+    await add(http, owner, [{"weight_kg": 84.5}])
+    url = "/api/v1/weights/apple-health-deletions"
+
+    response = await http.post(
+        url, json={"external_ids": ["hk-a", "hk-unknown"]}, headers=owner.headers
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"deleted": 1}
+    owned = (await history(http, owner))["entries"]
+    assert sorted((e["weight_kg"], e["source"]) for e in owned) == [
+        (84.0, "apple_health"),
+        (84.5, "app"),
+    ]
+    # Another account's sample with the same id stays.
+    assert len((await history(http, other))["entries"]) == 2
+    # Sent again after a lost response: nothing left to delete.
+    again = await http.post(url, json={"external_ids": ["hk-a"]}, headers=owner.headers)
+    assert again.json() == {"deleted": 0}
+    empty = await http.post(url, json={"external_ids": []}, headers=owner.headers)
+    assert empty.status_code == 422
+
+
 async def test_turning_weight_tracking_off_keeps_the_entries(http: httpx.AsyncClient) -> None:
     owner = await account(http, "bea@example.com")
     await add(http, owner, [{"weight_kg": 81.0}])

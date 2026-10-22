@@ -1278,6 +1278,63 @@
         }
       }
     },
+    "/api/v1/weights/apple-health-deletions": {
+      "post": {
+        "tags": [
+          "weight"
+        ],
+        "summary": "Remove Apple Health Weights",
+        "description": "Delete the Apple Health weigh-ins whose samples were deleted in Apple Health.\n\nOnly entries imported from Apple Health match; unknown ids are ignored.",
+        "operationId": "deleteAppleHealthWeights",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppleHealthDeletions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeightsDeleted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/expenditure": {
       "get": {
         "tags": [
@@ -1553,6 +1610,28 @@
   },
   "components": {
     "schemas": {
+      "AppleHealthDeletions": {
+        "properties": {
+          "external_ids": {
+            "items": {
+              "type": "string",
+              "maxLength": 255,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "External Ids",
+            "description": "Apple Health sample ids (`external_id`) of samples deleted in Apple Health"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "external_ids"
+        ],
+        "title": "AppleHealthDeletions"
+      },
       "ConnectionResponse": {
         "properties": {
           "client_id": {

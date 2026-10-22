@@ -22,6 +22,7 @@ from healthy_eating.services.weights import (
     WeightTrackingOffError,
     add_weights,
     delete_all_weights,
+    delete_apple_health_weights,
     delete_weight,
     edit_weight,
     weight_history,
@@ -112,6 +113,16 @@ class DeleteAllWeightsRequest(BaseModel):
 
     confirm: Literal["delete-all-weights"] = Field(
         description="Must be 'delete-all-weights', so weight data is never deleted by accident"
+    )
+
+
+class AppleHealthDeletions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    external_ids: list[Annotated[str, Field(min_length=1, max_length=255)]] = Field(
+        min_length=1,
+        max_length=MAX_BATCH,
+        description="Apple Health sample ids (`external_id`) of samples deleted in Apple Health",
     )
 
 
@@ -244,6 +255,19 @@ async def remove_weight(
     if not await delete_weight(session, user_id, weight_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Weigh-in not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/weights/apple-health-deletions", operation_id="deleteAppleHealthWeights")
+async def remove_apple_health_weights(
+    body: AppleHealthDeletions, user_id: CurrentUserId, session: SessionDep
+) -> WeightsDeleted:
+    """Delete the Apple Health weigh-ins whose samples were deleted in Apple Health.
+
+    Only entries imported from Apple Health match; unknown ids are ignored.
+    """
+    return WeightsDeleted(
+        deleted=await delete_apple_health_weights(session, user_id, body.external_ids)
+    )
 
 
 @router.delete("/weights", operation_id="deleteAllWeights")

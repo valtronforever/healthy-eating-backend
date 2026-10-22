@@ -208,6 +208,26 @@ async def delete_weight(session: AsyncSession, user_id: uuid.UUID, weight_id: uu
     return deleted is not None
 
 
+async def delete_apple_health_weights(
+    session: AsyncSession, user_id: uuid.UUID, external_ids: list[str]
+) -> int:
+    """Delete Apple Health weigh-ins by sample id (the sample was deleted in Apple Health).
+
+    Only the user's `apple_health` entries match; unknown ids are ignored, so the app can send
+    a deletion again after a failed request.
+    """
+    deleted = await session.scalars(
+        delete(WeightEntry)
+        .where(
+            WeightEntry.user_id == user_id,
+            WeightEntry.source == "apple_health",
+            WeightEntry.external_id.in_(external_ids),
+        )
+        .returning(WeightEntry.id)
+    )
+    return len(deleted.all())
+
+
 async def delete_all_weights(session: AsyncSession, user_id: uuid.UUID) -> int:
     """Delete every weigh-in of the user. Weight tracking keeps its setting."""
     count = await session.scalar(
