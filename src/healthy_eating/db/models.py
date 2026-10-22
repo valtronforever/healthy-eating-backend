@@ -19,6 +19,8 @@ from healthy_eating.nutrition.types import (
     OPTIONAL_NUTRIENT_FIELDS,
     STATUS_SETTERS,
     TRACKED_NUTRIENT_FIELDS,
+    WEIGHT_SOURCES,
+    WEIGHT_UNITS,
 )
 
 
@@ -42,6 +44,7 @@ class User(TimestampMixin, Base):
     __tablename__ = "users"
     __table_args__ = (
         CheckConstraint(_one_of("energy_unit", ENERGY_UNITS), name="energy_unit"),
+        CheckConstraint(_one_of("weight_unit", WEIGHT_UNITS), name="weight_unit"),
         *(
             CheckConstraint(_target_range(field), name=f"target_{field}")
             for field in NUTRIENT_FIELDS
@@ -57,6 +60,10 @@ class User(TimestampMixin, Base):
     timezone: Mapped[str | None] = mapped_column(String(64))
     energy_unit: Mapped[str] = mapped_column(String(4), default="kcal", server_default="kcal")
     calm_mode: Mapped[bool] = mapped_column(default=False, server_default=sa_false())
+    # Weight is opt-in: off until the first weigh-in from the chat or the app, or until the user
+    # turns it on. Off hides weight; the entries stay until the user deletes them.
+    weight_tracking: Mapped[bool] = mapped_column(default=False, server_default=sa_false())
+    weight_unit: Mapped[str] = mapped_column(String(2), default="kg", server_default="kg")
     # Daily target ranges in canonical units; either bound may be open (NULL).
     target_calories_kcal_min: Mapped[float | None]
     target_calories_kcal_max: Mapped[float | None]
@@ -241,6 +248,34 @@ class Meal(TimestampMixin, Base):
     client_id: Mapped[str | None] = mapped_column(
         ForeignKey("oauth_clients.client_id", ondelete="SET NULL")
     )
+
+
+class WeightEntry(TimestampMixin, Base):
+    """One weigh-in, in kg. Corrections update the row; Apple Health samples keep their id."""
+
+    __tablename__ = "weights"
+    __table_args__ = (
+        CheckConstraint(_one_of("source", WEIGHT_SOURCES), name="source"),
+        CheckConstraint("weight_kg > 0", name="weight_positive"),
+        Index("ix_weights_user_id_measured_at", "user_id", "measured_at"),
+        # An Apple Health sample is imported once per user, however often the app sends it.
+        Index(
+            "uq_weights_user_id_external_id",
+            "user_id",
+            "external_id",
+            unique=True,
+            postgresql_where="external_id IS NOT NULL",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    weight_kg: Mapped[float]
+    # Stored in UTC; utc_offset_minutes keeps the local offset, as for meals.
+    measured_at: Mapped[datetime]
+    utc_offset_minutes: Mapped[int | None]
+    source: Mapped[str] = mapped_column(String(16))
+    external_id: Mapped[str | None] = mapped_column(String(255))
 
 
 class DayStatusRecord(TimestampMixin, Base):

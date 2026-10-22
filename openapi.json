@@ -922,6 +922,362 @@
         }
       }
     },
+    "/api/v1/weights": {
+      "get": {
+        "tags": [
+          "weight"
+        ],
+        "summary": "Read Weights",
+        "description": "Weigh-ins and the smoothed trend for a range of local days.",
+        "operationId": "listWeights",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "First local day; default 89 days ago",
+              "title": "From"
+            },
+            "description": "First local day; default 89 days ago"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Last local day; default today",
+              "title": "To"
+            },
+            "description": "Last local day; default today"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeightsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "weight"
+        ],
+        "summary": "Create Weights",
+        "description": "Add weigh-ins: one typed in the app, or a batch from Apple Health.\n\nA weigh-in typed in the app turns weight tracking on. Apple Health entries are refused\nwhile it is off, so imports only start after the user turns it on. All entries of one\nrequest must have the same source.",
+        "operationId": "addWeights",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WeightsCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeightsCreated"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Weight tracking is off (Apple Health import)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "weight"
+        ],
+        "summary": "Remove All Weights",
+        "description": "Delete every weigh-in of the user. The weight tracking setting stays as it is.",
+        "operationId": "deleteAllWeights",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAllWeightsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeightsDeleted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/weights/{weight_id}": {
+      "patch": {
+        "tags": [
+          "weight"
+        ],
+        "summary": "Update Weight",
+        "description": "Correct one of the user's weigh-ins in place.",
+        "operationId": "updateWeight",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weight_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Weight Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WeightUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeightEntryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "weight"
+        ],
+        "summary": "Remove Weight",
+        "description": "Delete one of the user's weigh-ins.",
+        "operationId": "deleteWeight",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "weight_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Weight Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/integration-status": {
       "get": {
         "tags": [
@@ -1462,6 +1818,22 @@
           "confirm"
         ],
         "title": "DeleteAccountRequest"
+      },
+      "DeleteAllWeightsRequest": {
+        "properties": {
+          "confirm": {
+            "type": "string",
+            "const": "delete-all-weights",
+            "title": "Confirm",
+            "description": "Must be 'delete-all-weights', so weight data is never deleted by accident"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "confirm"
+        ],
+        "title": "DeleteAllWeightsRequest"
       },
       "ErrorDetail": {
         "properties": {
@@ -2303,6 +2675,20 @@
           },
           "targets": {
             "$ref": "#/components/schemas/Targets"
+          },
+          "weight_tracking": {
+            "type": "boolean",
+            "title": "Weight Tracking",
+            "description": "Opt-in: off until the first weigh-in from the chat or the app, or until the user turns it on. Off hides weight everywhere; the entries stay until deleted"
+          },
+          "weight_unit": {
+            "type": "string",
+            "enum": [
+              "kg",
+              "lb"
+            ],
+            "title": "Weight Unit",
+            "description": "Unit to show weight in; values stay in kg"
           }
         },
         "type": "object",
@@ -2310,7 +2696,9 @@
           "timezone",
           "energy_unit",
           "calm_mode",
-          "targets"
+          "targets",
+          "weight_tracking",
+          "weight_unit"
         ],
         "title": "SettingsResponse"
       },
@@ -2362,6 +2750,32 @@
                 "type": "null"
               }
             ]
+          },
+          "weight_tracking": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight Tracking"
+          },
+          "weight_unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "kg",
+                  "lb"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight Unit"
           }
         },
         "type": "object",
@@ -2445,6 +2859,32 @@
         "type": "object",
         "title": "Targets",
         "description": "Daily targets in canonical units; null means no target."
+      },
+      "TrendPointResponse": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "weight_kg": {
+            "type": "number",
+            "title": "Weight Kg",
+            "description": "Mean of the day's weigh-ins"
+          },
+          "trend_kg": {
+            "type": "number",
+            "title": "Trend Kg",
+            "description": "Smoothed trend after that day"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "weight_kg",
+          "trend_kg"
+        ],
+        "title": "TrendPointResponse"
       },
       "TrendsResponse": {
         "properties": {
@@ -2621,6 +3061,274 @@
           "low_confidence_meals"
         ],
         "title": "WeeklyReviewResponse"
+      },
+      "WeightCreate": {
+        "properties": {
+          "weight_kg": {
+            "type": "number",
+            "maximum": 400.0,
+            "minimum": 20.0,
+            "title": "Weight Kg",
+            "description": "Weight in kg"
+          },
+          "measured_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured At",
+            "description": "ISO 8601; default now. Without an offset it is read in the user's time zone"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "app",
+              "apple_health"
+            ],
+            "title": "Source",
+            "description": "'app' for manual entry, 'apple_health' for imported samples",
+            "default": "app"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id",
+            "description": "Apple Health sample id; a sample sent again updates the same weigh-in"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "weight_kg"
+        ],
+        "title": "WeightCreate"
+      },
+      "WeightEntryResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "weight_kg": {
+            "type": "number",
+            "title": "Weight Kg"
+          },
+          "measured_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Measured At",
+            "description": "Local time of the weigh-in with its UTC offset"
+          },
+          "local_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Local Date"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "apple_health",
+              "assistant",
+              "app"
+            ],
+            "title": "Source"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "weight_kg",
+          "measured_at",
+          "local_date",
+          "source",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WeightEntryResponse"
+      },
+      "WeightUpdate": {
+        "properties": {
+          "weight_kg": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 400.0,
+                "minimum": 20.0,
+                "description": "Weight in kg"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight Kg"
+          },
+          "measured_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured At",
+            "description": "ISO 8601; without an offset it is read in the user's time zone"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "WeightUpdate",
+        "description": "Only the fields present are changed."
+      },
+      "WeightsCreate": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/WeightCreate"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Entries"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "title": "WeightsCreate"
+      },
+      "WeightsCreated": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/WeightEntryResponse"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "title": "WeightsCreated"
+      },
+      "WeightsDeleted": {
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "title": "Deleted",
+            "description": "How many weigh-ins were deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "title": "WeightsDeleted"
+      },
+      "WeightsResponse": {
+        "properties": {
+          "first_day": {
+            "type": "string",
+            "format": "date",
+            "title": "First Day"
+          },
+          "last_day": {
+            "type": "string",
+            "format": "date",
+            "title": "Last Day"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/WeightEntryResponse"
+            },
+            "type": "array",
+            "title": "Entries",
+            "description": "Weigh-ins of the range, oldest first"
+          },
+          "trend": {
+            "items": {
+              "$ref": "#/components/schemas/TrendPointResponse"
+            },
+            "type": "array",
+            "title": "Trend",
+            "description": "One point per local day with weigh-ins in the range, oldest first"
+          },
+          "latest_trend_kg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Trend Kg",
+            "description": "The trend on the range's last weigh-in day"
+          },
+          "weekly_change_kg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Change Kg",
+            "description": "Change of the trend per 7 days over the last 28 days of weigh-ins; null with less than 14 days between the first and last of them"
+          },
+          "change_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Days",
+            "description": "Days the weekly change is measured over"
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_day",
+          "last_day",
+          "entries",
+          "trend",
+          "latest_trend_kg",
+          "weekly_change_kg",
+          "change_days"
+        ],
+        "title": "WeightsResponse"
       }
     },
     "securitySchemes": {

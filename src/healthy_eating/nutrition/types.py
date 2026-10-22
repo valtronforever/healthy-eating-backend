@@ -25,6 +25,15 @@ TrackedNutrientField = Literal[
 ]
 TRACKED_NUTRIENT_FIELDS: tuple[TrackedNutrientField, ...] = get_args(TrackedNutrientField)
 
+# Unit the user wants body weight shown in. Weight is always stored in kg.
+WeightUnit = Literal["kg", "lb"]
+WEIGHT_UNITS: tuple[WeightUnit, ...] = get_args(WeightUnit)
+
+# Where a weigh-in came from: Apple Health (imported by the app), the chat (MCP) or typed in
+# the app.
+WeightSource = Literal["apple_health", "assistant", "app"]
+WEIGHT_SOURCES: tuple[WeightSource, ...] = get_args(WeightSource)
+
 # Unit the user wants energy shown in. Energy is always stored in kcal.
 EnergyUnit = Literal["kcal", "kj"]
 ENERGY_UNITS: tuple[EnergyUnit, ...] = get_args(EnergyUnit)

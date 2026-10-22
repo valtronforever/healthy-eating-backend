@@ -104,6 +104,7 @@ async def test_csv_export_is_a_zip_of_tables(
         "logins.csv",
         "meals.csv",
         "settings.csv",
+        "weights.csv",
     ]
 
     def table(name: str) -> list[dict[str, str]]:

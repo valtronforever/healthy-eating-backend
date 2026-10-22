@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
 from healthy_eating.api.errors import error_response
-from healthy_eating.nutrition.types import NUTRIENT_FIELDS, EnergyUnit, NutrientField
+from healthy_eating.nutrition.types import NUTRIENT_FIELDS, EnergyUnit, NutrientField, WeightUnit
 from healthy_eating.services.settings import (
     InvalidSettingsError,
     SettingsChanges,
@@ -51,6 +51,13 @@ class SettingsResponse(BaseModel):
     energy_unit: EnergyUnit = Field(description="Unit to show energy in; values stay in kcal")
     calm_mode: bool
     targets: Targets
+    weight_tracking: bool = Field(
+        description=(
+            "Opt-in: off until the first weigh-in from the chat or the app, or until the user "
+            "turns it on. Off hides weight everywhere; the entries stay until deleted"
+        )
+    )
+    weight_unit: WeightUnit = Field(description="Unit to show weight in; values stay in kg")
 
 
 class SettingsUpdate(BaseModel):
@@ -60,6 +67,8 @@ class SettingsUpdate(BaseModel):
     energy_unit: EnergyUnit | None = None
     calm_mode: bool | None = None
     targets: Targets | None = None
+    weight_tracking: bool | None = None
+    weight_unit: WeightUnit | None = None
 
     @field_validator("timezone")
     @classmethod
@@ -73,7 +82,7 @@ class SettingsUpdate(BaseModel):
 
     @model_validator(mode="after")
     def _check_not_null(self) -> Self:
-        for name in ("energy_unit", "calm_mode", "targets"):
+        for name in ("energy_unit", "calm_mode", "targets", "weight_tracking", "weight_unit"):
             if name in self.model_fields_set and getattr(self, name) is None:
                 raise ValueError(f"{name} cannot be null")
         return self
@@ -92,6 +101,8 @@ class SettingsUpdate(BaseModel):
             energy_unit=self.energy_unit if self.energy_unit is not None else UNSET,
             calm_mode=self.calm_mode if self.calm_mode is not None else UNSET,
             targets=targets,
+            weight_tracking=self.weight_tracking if self.weight_tracking is not None else UNSET,
+            weight_unit=self.weight_unit if self.weight_unit is not None else UNSET,
         )
 
 
@@ -105,6 +116,8 @@ def _response(settings: UserSettings) -> SettingsResponse:
         energy_unit=settings.energy_unit,
         calm_mode=settings.calm_mode,
         targets=Targets(**targets),
+        weight_tracking=settings.weight_tracking,
+        weight_unit=settings.weight_unit,
     )
 
 

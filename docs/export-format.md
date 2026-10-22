@@ -15,8 +15,8 @@ their meaning.
 
 ## Units and times
 
-- Energy in kcal; protein, fat, carbohydrates and portions in grams. Users who chose kJ in
-  the app still get kcal here.
+- Energy in kcal; protein, fat, carbohydrates and portions in grams; body weight in kg. Users
+  who chose kJ or lb in the app still get kcal and kg here.
 - Times are ISO 8601 with a UTC offset. `eaten_at_utc` is the stored time; `eaten_at_local`
   and `local_date` are the meal's local time and the local day it counts for (its own UTC
   offset if known, otherwise the user's time zone, otherwise UTC).
@@ -27,17 +27,19 @@ their meaning.
 {
  "format_version": 1,
  "exported_at": "2026-10-19T08:00:00+00:00",
- "units": {"energy": "kcal", "macronutrients": "g", "portion": "g"},
+ "units": {"energy": "kcal", "macronutrients": "g", "portion": "g", "weight": "kg"},
  "account": {"id": "…", "display_name": "…", "email": "…", "created_at": "…"},
  "logins": [{"provider": "google", "email": "…", "email_verified": true,
              "created_at": "…", "last_login_at": "…"}],
  "settings": {"timezone": "Europe/Berlin", "energy_unit": "kcal", "calm_mode": false,
+              "weight_tracking": true, "weight_unit": "kg",
               "targets": {"calories_kcal": {"min": 1800, "max": 2200}, "protein_g": null,
                           "fat_g": null, "carbohydrates_g": null}},
  "connections": [{"client_name": "Claude", "kind": "ai_assistant", "created_at": "…",
                   "last_used_at": "…", "revoked_at": null}],
  "day_statuses": [{"date": "2026-10-18", "status": "complete", "set_by": "user",
                    "updated_at": "…"}],
+ "weights": [{"weight_id": "…", "weight_kg": 78.4, "…": "…"}],
  "meals": [{"meal_id": "…", "dish_name": "…", "…": "…"}]
 }
 ```
@@ -45,6 +47,9 @@ their meaning.
 - `connections`: every sign-in ever made, revoked ones too (`revoked_at` set). `kind` is
   `ai_assistant` (an MCP client) or `ios_app`.
 - `day_statuses`: days marked `complete` or `partial`; `set_by` is `user` or `assistant`.
+- `weights`: weigh-ins, oldest first: `weight_id`, `weight_kg`, `measured_at_utc`,
+  `measured_at_local`, `local_date`, `utc_offset_minutes`, `source` (`app`, `assistant` or
+  `apple_health`), `created_at`, `updated_at`. Present even when weight tracking is off.
 - `meals`: oldest first, with the fields below.
 
 ## Meal fields
@@ -71,9 +76,10 @@ their meaning.
 |---|---|
 | `account.json` | `format_version`, `exported_at` and the `account` object as above |
 | `logins.csv` | `provider, email, email_verified, created_at, last_login_at` |
-| `settings.csv` | `setting, value`: `timezone`, `energy_unit`, `calm_mode`, `target_<nutrient>_<min\|max>` |
+| `settings.csv` | `setting, value`: `timezone`, `energy_unit`, `calm_mode`, `weight_tracking`, `weight_unit`, `target_<nutrient>_<min\|max>` |
 | `connections.csv` | `client_name, kind, created_at, last_used_at, revoked_at` |
 | `day_statuses.csv` | `date, status, set_by, updated_at` |
+| `weights.csv` | The weigh-in fields above, in that order |
 | `meals.csv` | The meal fields above, in that order |
 
 CSV files are UTF-8 with a header row. Empty cells mean "not known" or "not set"; booleans are

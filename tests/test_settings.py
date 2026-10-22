@@ -43,6 +43,8 @@ async def test_new_user_has_default_settings(http: httpx.AsyncClient, token: str
         "energy_unit": "kcal",
         "calm_mode": False,
         "targets": NO_TARGETS,
+        "weight_tracking": False,
+        "weight_unit": "kg",
     }
 
 
@@ -71,6 +73,8 @@ async def test_patch_changes_only_the_given_settings(http: httpx.AsyncClient, to
             "calories_kcal": {"min": 1800, "max": 2200},
             "protein_g": {"min": 90, "max": None},
         },
+        "weight_tracking": False,
+        "weight_unit": "kg",
     }
 
     response = await patch(http, token, {"calm_mode": True, "targets": {"protein_g": None}})

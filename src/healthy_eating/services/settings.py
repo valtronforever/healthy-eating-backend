@@ -1,4 +1,4 @@
-"""User settings: time zone, energy unit, calm mode and daily nutrition targets."""
+"""User settings: time zone, energy and weight units, calm mode, weight tracking and targets."""
 
 import uuid
 from collections.abc import Collection, Mapping
@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from healthy_eating.db.models import User
-from healthy_eating.nutrition.types import NUTRIENT_FIELDS, EnergyUnit, NutrientField
+from healthy_eating.nutrition.types import NUTRIENT_FIELDS, EnergyUnit, NutrientField, WeightUnit
 from healthy_eating.services.local_time import is_valid_time_zone
 from healthy_eating.services.unset import UNSET, Unset
 
@@ -43,6 +43,8 @@ class UserSettings:
     calm_mode: bool
     # None when the user has no target for that value.
     targets: dict[NutrientField, TargetRange | None]
+    weight_tracking: bool = False
+    weight_unit: WeightUnit = "kg"
 
 
 @dataclass(frozen=True)
@@ -52,6 +54,8 @@ class SettingsChanges:
     timezone: str | Unset | None = UNSET
     energy_unit: EnergyUnit | Unset = UNSET
     calm_mode: bool | Unset = UNSET
+    weight_tracking: bool | Unset = UNSET
+    weight_unit: WeightUnit | Unset = UNSET
     # Only the targets listed here change; None clears a target.
     targets: Mapping[NutrientField, TargetRange | None] = field(default_factory=dict)
 
@@ -68,6 +72,8 @@ def settings_of(user: User) -> UserSettings:
         energy_unit="kj" if user.energy_unit == "kj" else "kcal",
         calm_mode=user.calm_mode,
         targets=targets,
+        weight_tracking=user.weight_tracking,
+        weight_unit="lb" if user.weight_unit == "lb" else "kg",
     )
 
 
@@ -105,6 +111,10 @@ def _apply(user: User, changes: SettingsChanges) -> None:
         user.energy_unit = changes.energy_unit
     if not isinstance(changes.calm_mode, Unset):
         user.calm_mode = changes.calm_mode
+    if not isinstance(changes.weight_tracking, Unset):
+        user.weight_tracking = changes.weight_tracking
+    if not isinstance(changes.weight_unit, Unset):
+        user.weight_unit = changes.weight_unit
     for name, target in changes.targets.items():
         if target is not None:
             target.validate()

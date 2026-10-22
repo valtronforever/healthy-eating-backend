@@ -18,7 +18,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from healthy_eating.db import Database
-from healthy_eating.db.models import DayStatusRecord, Grant, Identity, Meal, OAuthClient, User
+from healthy_eating.db.models import (
+    DayStatusRecord,
+    Grant,
+    Identity,
+    Meal,
+    OAuthClient,
+    User,
+    WeightEntry,
+)
 from healthy_eating.services.connections import connection_kind
 from healthy_eating.services.local_time import local_eaten_at
 from healthy_eating.services.settings import settings_of
@@ -51,6 +59,17 @@ MEAL_COLUMNS = [
     "updated_at",
 ]
 DAY_STATUS_COLUMNS = ["date", "status", "set_by", "updated_at"]
+WEIGHT_COLUMNS = [
+    "weight_id",
+    "weight_kg",
+    "measured_at_utc",
+    "measured_at_local",
+    "local_date",
+    "utc_offset_minutes",
+    "source",
+    "created_at",
+    "updated_at",
+]
 CONNECTION_COLUMNS = ["client_name", "kind", "created_at", "last_used_at", "revoked_at"]
 LOGIN_COLUMNS = ["provider", "email", "email_verified", "created_at", "last_login_at"]
 SETTING_COLUMNS = ["setting", "value"]
@@ -72,6 +91,7 @@ class _Header:
     settings: dict[str, Any]
     connections: list[dict[str, Any]]
     day_statuses: list[dict[str, Any]]
+    weights: list[dict[str, Any]]
     time_zone: str | None
 
 
@@ -88,6 +108,11 @@ async def _header(session: AsyncSession, user_id: uuid.UUID, now: datetime) -> _
         .join(OAuthClient, OAuthClient.client_id == Grant.client_id)
         .where(Grant.user_id == user_id)
         .order_by(Grant.created_at)
+    )
+    weights = await session.scalars(
+        select(WeightEntry)
+        .where(WeightEntry.user_id == user_id)
+        .order_by(WeightEntry.measured_at, WeightEntry.id)
     )
     statuses = await session.scalars(
         select(DayStatusRecord)
@@ -116,6 +141,8 @@ async def _header(session: AsyncSession, user_id: uuid.UUID, now: datetime) -> _
             "timezone": settings.timezone,
             "energy_unit": settings.energy_unit,
             "calm_mode": settings.calm_mode,
+            "weight_tracking": settings.weight_tracking,
+            "weight_unit": settings.weight_unit,
             "targets": {
                 name: None if target is None else {"min": target.min, "max": target.max}
                 for name, target in settings.targets.items()
@@ -140,6 +167,7 @@ async def _header(session: AsyncSession, user_id: uuid.UUID, now: datetime) -> _
             }
             for status in statuses
         ],
+        weights=[_weight(entry, user.timezone) for entry in weights],
         time_zone=user.timezone,
     )
 
@@ -172,6 +200,21 @@ def _meal(meal: Meal, client_name: str | None, time_zone: str | None) -> dict[st
     }
 
 
+def _weight(entry: WeightEntry, time_zone: str | None) -> dict[str, Any]:
+    local = local_eaten_at(entry.measured_at, entry.utc_offset_minutes, time_zone)
+    return {
+        "weight_id": str(entry.id),
+        "weight_kg": entry.weight_kg,
+        "measured_at_utc": _iso(entry.measured_at),
+        "measured_at_local": _iso(local),
+        "local_date": local.date().isoformat(),
+        "utc_offset_minutes": entry.utc_offset_minutes,
+        "source": entry.source,
+        "created_at": _iso(entry.created_at),
+        "updated_at": _iso(entry.updated_at),
+    }
+
+
 async def _meal_batches(
     session: AsyncSession, user_id: uuid.UUID, time_zone: str | None
 ) -> AsyncIterator[list[dict[str, Any]]]:
@@ -193,12 +236,13 @@ async def export_json(db: Database, user_id: uuid.UUID, *, now: datetime) -> Asy
         head = {
             "format_version": FORMAT_VERSION,
             "exported_at": _iso(header.exported_at),
-            "units": {"energy": "kcal", "macronutrients": "g", "portion": "g"},
+            "units": {"energy": "kcal", "macronutrients": "g", "portion": "g", "weight": "kg"},
             "account": header.account,
             "logins": header.logins,
             "settings": header.settings,
             "connections": header.connections,
             "day_statuses": header.day_statuses,
+            "weights": header.weights,
         }
         # Everything but the closing brace, then the meals array piece by piece.
         yield (json.dumps(head, ensure_ascii=False, indent=1)[:-2] + ',\n "meals": [').encode()
@@ -253,7 +297,7 @@ def _write_csv(
 def _settings_rows(settings: dict[str, Any]) -> list[dict[str, Any]]:
     rows = [
         {"setting": name, "value": settings[name]}
-        for name in ("timezone", "energy_unit", "calm_mode")
+        for name in ("timezone", "energy_unit", "calm_mode", "weight_tracking", "weight_unit")
     ]
     for nutrient, target in settings["targets"].items():
         for bound in ("min", "max"):
@@ -279,6 +323,7 @@ async def export_csv_zip(
             _write_csv(archive, "settings.csv", SETTING_COLUMNS, _settings_rows(header.settings))
             _write_csv(archive, "connections.csv", CONNECTION_COLUMNS, header.connections)
             _write_csv(archive, "day_statuses.csv", DAY_STATUS_COLUMNS, header.day_statuses)
+            _write_csv(archive, "weights.csv", WEIGHT_COLUMNS, header.weights)
             yield sink.take()
 
             with (
