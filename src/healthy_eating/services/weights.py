@@ -227,7 +227,7 @@ async def weight_history(
     """
     user = await session.get(User, user_id)
     time_zone = None if user is None else user.timezone
-    _, end = utc_window(first_day, last_day)
+    _, end = utc_window(None, last_day)
     assert end is not None
     rows = await session.scalars(
         select(WeightEntry)

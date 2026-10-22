@@ -1278,6 +1278,53 @@
         }
       }
     },
+    "/api/v1/expenditure": {
+      "get": {
+        "tags": [
+          "weight"
+        ],
+        "summary": "Read Expenditure",
+        "description": "Energy the user maintains at, estimated from their own log and weight trend.",
+        "operationId": "getExpenditure",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenditureResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/integration-status": {
       "get": {
         "tags": [
@@ -1888,6 +1935,141 @@
           "message"
         ],
         "title": "ErrorResponse"
+      },
+      "ExpenditureResponse": {
+        "properties": {
+          "first_day": {
+            "type": "string",
+            "format": "date",
+            "title": "First Day",
+            "description": "First local day of the 28-day window"
+          },
+          "last_day": {
+            "type": "string",
+            "format": "date",
+            "title": "Last Day",
+            "description": "Today, in the user's time zone"
+          },
+          "counting_rule": {
+            "type": "string",
+            "enum": [
+              "complete_days",
+              "logged_days"
+            ],
+            "title": "Counting Rule"
+          },
+          "counted_days": {
+            "type": "integer",
+            "title": "Counted Days",
+            "description": "Days whose intake counts, as in Trends"
+          },
+          "weigh_ins": {
+            "type": "integer",
+            "title": "Weigh Ins",
+            "description": "Weigh-ins in the window"
+          },
+          "weigh_in_days": {
+            "type": "integer",
+            "title": "Weigh In Days",
+            "description": "Days with weigh-ins in the window"
+          },
+          "average_intake_kcal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Intake Kcal",
+            "description": "Average calories of the counted days"
+          },
+          "trend_change_kg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trend Change Kg",
+            "description": "Change of the weight trend over span_days"
+          },
+          "span_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Span Days",
+            "description": "Days between the two trend values compared"
+          },
+          "maintenance_kcal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maintenance Kcal",
+            "description": "Estimated energy the user maintains at, per day, rounded to 10 kcal: average intake minus the trend change x 7700 kcal per kg over span_days. Null when there is not enough data (see reason)"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "not_enough_logged_days",
+                  "not_enough_weigh_ins"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Why there is no estimate: fewer than 14 counted days, or weigh-ins on fewer than 6 days or spanning fewer than 14 days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_day",
+          "last_day",
+          "counting_rule",
+          "counted_days",
+          "weigh_ins",
+          "weigh_in_days",
+          "average_intake_kcal",
+          "trend_change_kg",
+          "span_days",
+          "maintenance_kcal",
+          "confidence",
+          "reason"
+        ],
+        "title": "ExpenditureResponse"
       },
       "GrantResponse": {
         "properties": {

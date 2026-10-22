@@ -4,6 +4,7 @@ from healthy_eating.api.errors import error_response
 from healthy_eating.api.v1 import (
     connections,
     days,
+    expenditure,
     export,
     integration,
     me,
@@ -28,6 +29,7 @@ router.include_router(days.router)
 router.include_router(trends.router)
 router.include_router(weekly_review.router)
 router.include_router(weights.router)
+router.include_router(expenditure.router)
 router.include_router(integration.router)
 router.include_router(connections.router)
 router.include_router(export.router)
