@@ -12,7 +12,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from evals.environment import FIXTURES_DIR, EvalEnvironment, Turn
-from evals.personas import CALORIE_PROJECT, CHAT
+from evals.personas import CALORIE_PROJECT, CHAT, CHAT_WITH_MEMORY
 from healthy_eating.db.base import utcnow
 from healthy_eating.db.models import Meal
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, OPTIONAL_NUTRIENT_FIELDS
@@ -527,6 +527,24 @@ async def weight_in_pounds(env: EvalEnvironment, checks: Checks, turns: list[Tur
     checks.require("no judgment of the weight", not JUDGMENT.search(turn.reply), turn.reply[-300:])
 
 
+async def weight_update_request(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    # A real ChatGPT message that only updated its own memory: short, Ukrainian, "update".
+    turn = await env.chat(CHAT_WITH_MEMORY.name, "Онови вагу 56кг")  # noqa: RUF001 (Ukrainian on purpose)
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    weights = await env.weights()
+    checks.require(
+        "exactly one weigh-in of 56 kg saved",
+        [w.weight_kg for w in weights] == [56],
+        str([(w.weight_kg, w.measured_at) for w in weights]),
+    )
+    checks.require(
+        "reply names HealthyEating", bool(HEALTHY_EATING.search(turn.reply)), turn.reply[-300:]
+    )
+    checks.require("no judgment of the weight", not JUDGMENT.search(turn.reply), turn.reply[-300:])
+
+
 async def what_did_i_eat(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
     await env.add_meal("Oatmeal with berries", (350, 12, 8, 55), minutes_ago=120)
     await env.add_meal("Chicken salad", (480, 35, 30, 18), minutes_ago=30)
@@ -705,6 +723,11 @@ SCENARIOS = [
         "weight_in_pounds",
         "The user gives their weight in lb: stored in kg, confirmed neutrally",
         weight_in_pounds,
+    ),
+    Scenario(
+        "weight_update_request",
+        "Short Ukrainian request to update the weight, chat with memory: one weigh-in saved",
+        weight_update_request,
     ),
     Scenario(
         "what_did_i_eat",

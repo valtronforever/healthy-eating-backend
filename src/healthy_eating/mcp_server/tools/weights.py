@@ -35,9 +35,12 @@ call it good, bad, progress or a setback, and never suggest a goal, a diet or a 
 
 LOG_WEIGHT_DESCRIPTION = (
     """\
-Save the user's body weight to HealthyEating. Only when the user tells you their weight (for
-example "I weighed 80.4 kg this morning" or "scale says 177 lb"); never ask for it. Pass the
-number and unit exactly as the user gave them; HealthyEating stores kg. Set `measured_at` when
+Save the user's body weight to HealthyEating. Call it every time the user states their weight
+or asks you to change, note or remember it, in any language and however short (for example "I
+weighed 80.4 kg this morning", "scale says 177 lb", "my weight is 56 kg now", "weight 56"). Do
+this even when you also keep their weight in your memory, notes or another tool: those do not
+reach HealthyEating. Never ask for the weight. Pass the number and unit exactly as the user gave
+them; HealthyEating stores kg. Set `measured_at` when
 they say when it was ("this morning", "yesterday"), with their UTC offset if you know it. To
 correct a weight saved earlier in the chat, pass its `weight_id` as `replaces_weight_id`.
 Finish with the one-line `user_message` as given: it names HealthyEating, so the user knows

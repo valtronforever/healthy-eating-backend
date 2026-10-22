@@ -49,4 +49,21 @@ CALORIE_PROJECT = Persona(
     connected_apps=("healthyeating", "sheets"),
 )
 
-ALL = [CHAT, CALORIE_PROJECT]
+CHAT_WITH_MEMORY = Persona(
+    name="chat_with_memory",
+    description=(
+        "A ChatGPT-style chat with its memory feature on, which competes with HealthyEating "
+        "for personal facts like body weight"
+    ),
+    system=(
+        "You are a helpful assistant in a general-purpose chat app, similar to the ChatGPT "
+        "app. You have a memory: when the user shares a lasting fact about themselves (their "
+        "name, preferences, goals, body weight), you remember it for future chats and start "
+        "your reply with 'Memory updated'. The user can connect apps to this chat; the tools "
+        "of connected apps are available to you. Reply in plain text, concisely and in a "
+        "friendly tone."
+    ),
+    connected_apps=("healthyeating",),
+)
+
+ALL = [CHAT, CALORIE_PROJECT, CHAT_WITH_MEMORY]
