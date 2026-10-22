@@ -42,7 +42,7 @@ async def test_tools_are_annotated(app: FastAPI, kim: Account) -> None:
     delete = tools["delete_meal"].annotations
     assert delete is not None
     assert delete.destructive_hint is True
-    for name in ("log_meal", "set_day_status", "set_timezone"):
+    for name in ("log_meal", "set_day_status", "set_timezone", "set_targets"):
         annotations = tools[name].annotations
         assert annotations is not None
         assert annotations.read_only_hint is False

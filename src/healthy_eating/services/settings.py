@@ -109,3 +109,36 @@ async def update_settings(
         setattr(user, f"target_{name}_max", None if target is None else target.max)
     await session.flush()
     return settings_of(user)
+
+
+async def set_targets_from_chat(
+    session: AsyncSession, user_id: uuid.UUID, targets: Mapping[NutrientField, TargetRange | None]
+) -> UserSettings | None:
+    """Change targets the user gave in the chat (MCP), or None if the user does not exist.
+
+    Stricter than the app: a target needs a bound and is never a single number, so the
+    assistant asks the user for a range. In Calm mode the calorie target is neither shown nor
+    changed, like on the app's targets screen. Nothing is saved when any target is rejected.
+    """
+    user = await session.get(User, user_id, with_for_update=True)
+    if user is None:
+        return None
+    if not targets:
+        raise InvalidSettingsError("No target given")
+    if user.calm_mode and "calories_kcal" in targets:
+        raise InvalidSettingsError(
+            "Calm mode is on, so the calorie target is not shown or changed; the user can "
+            "change it in the iOS app after turning Calm mode off"
+        )
+    for target in targets.values():
+        if target is None:
+            continue
+        if target.is_open:
+            raise InvalidSettingsError("A target needs a lower bound, an upper bound or both")
+        if target.min is not None and target.min == target.max:
+            raise InvalidSettingsError(
+                "A target is a range, never a single number; ask the user for a range "
+                "(for example '1800 to 2100 kcal' or 'at least 120 g protein')"
+            )
+        target.validate()
+    return await update_settings(session, user_id, SettingsChanges(targets=targets))

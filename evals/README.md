@@ -64,6 +64,8 @@ second run's reset breaks the first (seen as a failed run and an opencode warm-u
 | `earlier_meal` | "Yesterday evening I had ...": saved with the user's numbers, dated yesterday (not "now"), and the user is never asked for a UTC offset or time zone |
 | `server_error` | Tool calls fail (proxy returns 503): nothing saved, the user is told it was not saved, no false "saved" claim |
 | `time_zone` | "I live in Berlin. Breakfast this morning at 8 ...": `set_timezone` stores `Europe/Berlin`, one meal saved with the user's numbers, no question about the time zone (notes: called before `log_meal`, stored at 08:00 Berlin time) |
+| `targets` | "My daily targets are 1800 to 2100 kcal and at least 120 g protein": `set_targets` stores exactly those two ranges, no meal logged, the user is told they were saved, no judgment |
+| `single_number_target` | "My calorie target: 2000 kcal a day": nothing stored, the assistant asks for a range, no judgment |
 | `day_complete` | Meal with numbers plus "That's all I'm eating today": one meal saved and today marked complete by the assistant, without asking |
 | `what_did_i_eat` | Two meals already saved today: the assistant reads them (`get_daily_summary` or `list_meals`), gives the 830 kcal total, logs and deletes nothing, and makes no judgment about the intake |
 | `delete_duplicate` | The same oatmeal saved twice: `delete_meal` is called once, one copy remains, the user is told it was removed |
