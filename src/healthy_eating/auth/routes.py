@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -11,9 +12,15 @@ from healthy_eating.auth.provider import LoginRequestNotFoundError, PostgresOAut
 from healthy_eating.auth.social import PROVIDER_LABELS, SocialLogin, SocialLoginError
 from healthy_eating.config import Settings
 from healthy_eating.db import Database
+from healthy_eating.db.base import utcnow
+from healthy_eating.services.linking import finish_browser_step, open_link_request
 from healthy_eating.services.users import SocialProfile, find_or_create_user
 
 SESSION_KEY = "login_request"
+# Set while the browser adds a login to a signed-in account (services/linking.py).
+LINK_SESSION_KEY = "link_request"
+# Where the browser goes after adding a login: the iOS app, the only client that links.
+LINK_CALLBACK = "healthyeating://link/callback"
 
 router = APIRouter(include_in_schema=False)
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
@@ -25,8 +32,25 @@ def _error(request: Request, message: str, status_code: int = 400) -> HTMLRespon
     )
 
 
+def _back_to_app(**params: str) -> RedirectResponse:
+    return RedirectResponse(f"{LINK_CALLBACK}?{urlencode(params)}", status_code=303)
+
+
+async def _finish_link(request: Request, link_id: str, profile: SocialProfile) -> Response:
+    """Keep the new identity in the link request and give the app its completion code."""
+    db: Database = request.app.state.db
+    async with db.session() as session:
+        code = await finish_browser_step(session, link_id, profile, now=utcnow())
+    if code is None:
+        return _back_to_app(error="expired")
+    return _back_to_app(code=code)
+
+
 async def _finish_login(request: Request, profile: SocialProfile) -> Response:
     """Link the social identity to a user and send the browser back to the OAuth client."""
+    link_id = request.session.pop(LINK_SESSION_KEY, None)
+    if link_id:
+        return await _finish_link(request, link_id, profile)
     request_id = request.session.pop(SESSION_KEY, None)
     if not request_id:
         return _error(request, "Your sign-in session has expired. Please start again.")
@@ -79,9 +103,40 @@ async def cancel_login(request: Request) -> Response:
     return RedirectResponse(redirect_url, status_code=303)
 
 
+@router.get("/link")
+async def link_page(
+    request: Request, link_id: Annotated[str, Query(alias="request")] = ""
+) -> Response:
+    """Add a login to a signed-in account: the provider picker for the app's web sheet."""
+    db: Database = request.app.state.db
+    social: SocialLogin = request.app.state.social_login
+    settings: Settings = request.app.state.settings
+    async with db.session() as session:
+        link = await open_link_request(session, link_id, now=utcnow())
+    if link is None:
+        return _error(request, "This link is invalid or has expired. Start again in the app.")
+    # A link, not a sign-in: the callback must not finish an OAuth sign-in by mistake.
+    request.session.pop(SESSION_KEY, None)
+    request.session[LINK_SESSION_KEY] = link_id
+    return templates.TemplateResponse(
+        request,
+        "link.html",
+        {
+            "providers": [(p, PROVIDER_LABELS[p]) for p in social.enabled_providers],
+            "dev_login_enabled": settings.dev_login_enabled,
+        },
+    )
+
+
+@router.get("/link/cancel")
+async def cancel_link(request: Request) -> Response:
+    request.session.pop(LINK_SESSION_KEY, None)
+    return _back_to_app(error="cancelled")
+
+
 @router.get("/auth/start/{provider_name}")
 async def start_social_login(request: Request, provider_name: str) -> Response:
-    if SESSION_KEY not in request.session:
+    if SESSION_KEY not in request.session and LINK_SESSION_KEY not in request.session:
         return _error(request, "Your sign-in session has expired. Please start again.")
     social: SocialLogin = request.app.state.social_login
     try:

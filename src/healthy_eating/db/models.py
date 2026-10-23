@@ -145,6 +145,29 @@ class Grant(TimestampMixin, Base):
     revoked_at: Mapped[datetime | None]
 
 
+class LinkRequest(Base):
+    """A signed-in user adding another social login to their account (services/linking.py).
+
+    Created by the app with a PKCE challenge; the browser step stores the new identity here and
+    sends a one-time code back to the app; the app finishes it with the code and its verifier.
+    """
+
+    __tablename__ = "link_requests"
+
+    # Random and unguessable; it is in the link page's URL.
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    code_challenge: Mapped[str] = mapped_column(String(128))
+    completion_code_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
+    provider: Mapped[str | None] = mapped_column(String(32))
+    subject: Mapped[str | None] = mapped_column(String(255))
+    email: Mapped[str | None] = mapped_column(String(320))
+    email_verified: Mapped[bool] = mapped_column(default=False)
+    expires_at: Mapped[datetime]
+
+
 class AuthorizationCodeRecord(Base):
     __tablename__ = "authorization_codes"
 

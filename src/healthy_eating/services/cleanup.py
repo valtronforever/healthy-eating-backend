@@ -21,6 +21,7 @@ from healthy_eating.db.models import (
     AccessTokenRecord,
     AuthorizationCodeRecord,
     Grant,
+    LinkRequest,
     LoginRequest,
     RefreshTokenRecord,
 )
@@ -59,7 +60,13 @@ async def delete_expired(session: AsyncSession, *, now: datetime) -> CleanupResu
     """
     expired = {
         model: await _count_deleted(session, delete(model).where(model.expires_at <= now))
-        for model in (LoginRequest, AuthorizationCodeRecord, AccessTokenRecord, RefreshTokenRecord)
+        for model in (
+            LoginRequest,
+            LinkRequest,
+            AuthorizationCodeRecord,
+            AccessTokenRecord,
+            RefreshTokenRecord,
+        )
     }
     grants = await _count_deleted(
         session,
@@ -69,7 +76,8 @@ async def delete_expired(session: AsyncSession, *, now: datetime) -> CleanupResu
         ),
     )
     return CleanupResult(
-        login_requests=expired[LoginRequest],
+        # Requests to add a login count with sign-in requests.
+        login_requests=expired[LoginRequest] + expired[LinkRequest],
         authorization_codes=expired[AuthorizationCodeRecord],
         access_tokens=expired[AccessTokenRecord],
         refresh_tokens=expired[RefreshTokenRecord],

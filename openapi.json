@@ -121,6 +121,259 @@
         ]
       }
     },
+    "/api/v1/me/logins": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Get Logins",
+        "description": "The social logins that sign in to this account.",
+        "operationId": "listLogins",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/logins/link": {
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Start Link",
+        "description": "Start adding another social login to this account. Accounts are never linked by email.",
+        "operationId": "startLoginLink",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkStartResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/logins/link/complete": {
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Complete Link",
+        "description": "Finish adding a login. Each code works once, also when it is refused.",
+        "operationId": "completeLoginLink",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkComplete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkCompleteResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The code is unknown, used, expired or does not match",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The login belongs to another Healthy Eating account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/logins/{login_id}": {
+      "delete": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Delete Login",
+        "description": "Remove a login from this account. The last login cannot be removed.",
+        "operationId": "deleteLogin",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "login_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Login Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The account's only login",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/me/settings": {
       "get": {
         "tags": [
@@ -2509,6 +2762,161 @@
           "reason"
         ],
         "title": "LeftOutDayResponse"
+      },
+      "LinkComplete": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 128,
+            "title": "Code",
+            "description": "`code` from healthyeating://link/callback"
+          },
+          "code_verifier": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 43,
+            "title": "Code Verifier"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "code_verifier"
+        ],
+        "title": "LinkComplete"
+      },
+      "LinkCompleteResponse": {
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": [
+              "linked",
+              "already_linked"
+            ],
+            "title": "Result",
+            "description": "already_linked: the login was already one of this account's logins"
+          }
+        },
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "title": "LinkCompleteResponse"
+      },
+      "LinkStart": {
+        "properties": {
+          "code_challenge": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 43,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Code Challenge",
+            "description": "PKCE S256 challenge of a verifier only the app knows"
+          },
+          "code_challenge_method": {
+            "type": "string",
+            "const": "S256",
+            "title": "Code Challenge Method",
+            "default": "S256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code_challenge"
+        ],
+        "title": "LinkStart"
+      },
+      "LinkStartResponse": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Open in the system web sheet. The user signs in with the login to add; the browser then goes to healthyeating://link/callback with `code` (finish with completeLoginLink) or `error` (cancelled or expired)"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "title": "LinkStartResponse"
+      },
+      "Login": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider",
+            "description": "google, microsoft, apple (dev on development servers)"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email",
+            "description": "The email the provider gave, if any"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When it was added to the account"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "provider",
+          "email",
+          "created_at",
+          "last_login_at"
+        ],
+        "title": "Login"
+      },
+      "LoginList": {
+        "properties": {
+          "logins": {
+            "items": {
+              "$ref": "#/components/schemas/Login"
+            },
+            "type": "array",
+            "title": "Logins",
+            "description": "Oldest first"
+          }
+        },
+        "type": "object",
+        "required": [
+          "logins"
+        ],
+        "title": "LoginList"
       },
       "MeResponse": {
         "properties": {
