@@ -36,7 +36,9 @@ def test_every_operation_is_explicit_and_documented() -> None:
     assert all(isinstance(op_id, str) and "_" not in op_id for op_id in ids)
     for method, path, operation in operations():
         assert path.startswith("/api/v1/"), path
-        assert operation["security"] == [{"BearerAuth": []}], (method, path)
+        # The widget endpoint takes only widget tokens; everything else the app's access token.
+        scheme = "WidgetToken" if path == "/api/v1/widget/today" else "BearerAuth"
+        assert operation["security"] == [{scheme: []}], (method, path)
         responses = operation["responses"]
         assert isinstance(responses, dict)
         for status, response in responses.items():

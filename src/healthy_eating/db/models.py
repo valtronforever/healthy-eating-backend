@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy import false as sa_false
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -276,6 +276,26 @@ class WeightEntry(TimestampMixin, Base):
     utc_offset_minutes: Mapped[int | None]
     source: Mapped[str] = mapped_column(String(16))
     external_id: Mapped[str | None] = mapped_column(String(255))
+
+
+class WidgetToken(Base):
+    """A read-only token for the iOS widgets (`/api/v1/widget/today` only), one per app sign-in.
+
+    Stored as a SHA-256 hash. It ends with its grant: revoking or deleting the app's sign-in
+    deletes or disables it, and deleting the account deletes it.
+    """
+
+    __tablename__ = "widget_tokens"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    grant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("grants.id", ondelete="CASCADE"), unique=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    last_used_at: Mapped[datetime | None]
 
 
 class DayStatusRecord(TimestampMixin, Base):

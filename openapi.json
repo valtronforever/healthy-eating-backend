@@ -1606,6 +1606,110 @@
           }
         }
       }
+    },
+    "/api/v1/widget-token": {
+      "post": {
+        "tags": [
+          "widget"
+        ],
+        "summary": "Create Widget Token",
+        "description": "A read-only token for the iOS widgets, tied to the sign-in making this request.",
+        "operationId": "createWidgetToken",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WidgetTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not an app sign-in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/widget/today": {
+      "get": {
+        "tags": [
+          "widget"
+        ],
+        "summary": "Read Widget Today",
+        "description": "Today's totals for the iOS widgets. Accepts only a widget token.",
+        "operationId": "getWidgetToday",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WidgetTodayResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "WidgetToken": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3590,12 +3694,118 @@
           "change_days"
         ],
         "title": "WeightsResponse"
+      },
+      "WidgetTodayResponse": {
+        "properties": {
+          "local_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Local Date",
+            "description": "The user's local today"
+          },
+          "meal_count": {
+            "type": "integer",
+            "title": "Meal Count"
+          },
+          "calories_kcal": {
+            "type": "number",
+            "title": "Calories Kcal"
+          },
+          "protein_g": {
+            "type": "number",
+            "title": "Protein G"
+          },
+          "fat_g": {
+            "type": "number",
+            "title": "Fat G"
+          },
+          "carbohydrates_g": {
+            "type": "number",
+            "title": "Carbohydrates G"
+          },
+          "targets": {
+            "$ref": "#/components/schemas/Targets"
+          },
+          "energy_unit": {
+            "type": "string",
+            "enum": [
+              "kcal",
+              "kj"
+            ],
+            "title": "Energy Unit",
+            "description": "Display unit; values stay in kcal"
+          },
+          "calm_mode": {
+            "type": "boolean",
+            "title": "Calm Mode",
+            "description": "True: the widgets show no calories"
+          },
+          "last_meal_saved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Meal Saved At",
+            "description": "When the latest meal reached Healthy Eating"
+          },
+          "last_client_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Client Name",
+            "description": "The AI assistant that saved it, if known"
+          }
+        },
+        "type": "object",
+        "required": [
+          "local_date",
+          "meal_count",
+          "calories_kcal",
+          "protein_g",
+          "fat_g",
+          "carbohydrates_g",
+          "targets",
+          "energy_unit",
+          "calm_mode",
+          "last_meal_saved_at",
+          "last_client_name"
+        ],
+        "title": "WidgetTodayResponse"
+      },
+      "WidgetTokenResponse": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token",
+            "description": "Opaque read-only token for GET /api/v1/widget/today. Replaces an earlier one of the same sign-in; stops working when that sign-in is revoked"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "WidgetTokenResponse"
       }
     },
     "securitySchemes": {
       "BearerAuth": {
         "type": "http",
         "description": "Access token from this server's OAuth 2.1 flow (/authorize with PKCE, then /token). The same tokens work for the MCP endpoint.",
+        "scheme": "bearer"
+      },
+      "WidgetToken": {
+        "type": "http",
+        "description": "A widget token from POST /api/v1/widget-token. It reads only /api/v1/widget/today and ends with the app sign-in it was issued for",
         "scheme": "bearer"
       }
     }
