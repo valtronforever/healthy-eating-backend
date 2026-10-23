@@ -4,17 +4,20 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated, Self
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from healthy_eating.api.deps import CurrentUserId, SessionDep
+from healthy_eating.api.deps import CurrentUserId, SessionDep, bearer_scheme
 from healthy_eating.api.errors import error_response
+from healthy_eating.db.base import utcnow
 from healthy_eating.nutrition.types import (
     OPTIONAL_NUTRIENT_FIELDS,
     Confidence,
     MealSource,
     TrackedNutrientField,
 )
+from healthy_eating.services.connections import client_of_access_token
 from healthy_eating.services.meals import (
     MAX_CALORIES_KCAL,
     MAX_DISH_NAME_LENGTH,
@@ -30,6 +33,7 @@ from healthy_eating.services.meals import (
     list_meals,
 )
 from healthy_eating.services.unset import UNSET
+from healthy_eating.services.usual_meals import MealIdTakenError, relog_meal, usual_meals
 
 router = APIRouter(tags=["meals"])
 
@@ -215,6 +219,92 @@ async def update_meal(
     if edited is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Meal not found")
     return MealUpdateResponse(meal=_meal_response(edited.meal), warnings=edited.warnings)
+
+
+class UsualMealResponse(BaseModel):
+    meal: MealResponse = Field(
+        description="The latest meal with this name: what a re-log copies (use its id)"
+    )
+    times: int = Field(description="How often the dish was eaten in the last 90 days")
+
+
+class UsualMealsResponse(BaseModel):
+    meals: list[UsualMealResponse] = Field(
+        description="Dishes eaten at least twice in the last 90 days, most often eaten first"
+    )
+
+
+class MealRelog(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID | None = Field(
+        default=None,
+        description=(
+            "Id for the new meal, chosen by the client; sending the same request again returns "
+            "that meal instead of saving a second one"
+        ),
+    )
+    eaten_at: datetime | None = Field(
+        default=None,
+        description="ISO 8601; default now. Without an offset it is read in the user's time zone",
+    )
+
+
+BearerCredentials = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]
+
+
+@router.get("/usual-meals", operation_id="listUsualMeals")
+async def read_usual_meals(user_id: CurrentUserId, session: SessionDep) -> UsualMealsResponse:
+    """The user's usual meals, to log one again with one tap."""
+    meals = await usual_meals(session, user_id, now=utcnow())
+    return UsualMealsResponse(
+        meals=[
+            UsualMealResponse(meal=_meal_response(item.template), times=item.times)
+            for item in meals
+        ]
+    )
+
+
+@router.post(
+    "/meals/{meal_id}/relog",
+    status_code=status.HTTP_201_CREATED,
+    operation_id="relogMeal",
+    responses={
+        404: error_response("Not found"),
+        409: error_response("The id is taken by another meal"),
+    },
+)
+async def relog(
+    meal_id: uuid.UUID,
+    body: MealRelog,
+    user_id: CurrentUserId,
+    session: SessionDep,
+    credentials: BearerCredentials,
+) -> MealResponse:
+    """Log one of the user's meals again: same values and provenance, a new time.
+
+    The app never creates meals from scratch; this copies an existing one.
+    """
+    client_id = (
+        None
+        if credentials is None
+        else await client_of_access_token(session, credentials.credentials)
+    )
+    try:
+        meal = await relog_meal(
+            session,
+            user_id,
+            meal_id,
+            new_meal_id=body.id,
+            eaten_at=body.eaten_at,
+            client_id=client_id,
+            now=utcnow(),
+        )
+    except MealIdTakenError:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Choose another id") from None
+    if meal is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Meal not found")
+    return _meal_response(meal)
 
 
 @router.delete(

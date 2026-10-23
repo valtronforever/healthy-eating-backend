@@ -576,6 +576,142 @@
         }
       }
     },
+    "/api/v1/usual-meals": {
+      "get": {
+        "tags": [
+          "meals"
+        ],
+        "summary": "Read Usual Meals",
+        "description": "The user's usual meals, to log one again with one tap.",
+        "operationId": "listUsualMeals",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsualMealsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/meals/{meal_id}/relog": {
+      "post": {
+        "tags": [
+          "meals"
+        ],
+        "summary": "Relog",
+        "description": "Log one of the user's meals again: same values and provenance, a new time.\n\nThe app never creates meals from scratch; this copies an existing one.",
+        "operationId": "relogMeal",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealRelog"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The id is taken by another meal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/days": {
       "get": {
         "tags": [
@@ -2450,6 +2586,39 @@
         ],
         "title": "MealListResponse"
       },
+      "MealRelog": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id",
+            "description": "Id for the new meal, chosen by the client; sending the same request again returns that meal instead of saving a second one"
+          },
+          "eaten_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eaten At",
+            "description": "ISO 8601; default now. Without an offset it is read in the user's time zone"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MealRelog"
+      },
       "MealResponse": {
         "properties": {
           "id": {
@@ -3294,6 +3463,42 @@
           "change"
         ],
         "title": "TrendsResponse"
+      },
+      "UsualMealResponse": {
+        "properties": {
+          "meal": {
+            "$ref": "#/components/schemas/MealResponse",
+            "description": "The latest meal with this name: what a re-log copies (use its id)"
+          },
+          "times": {
+            "type": "integer",
+            "title": "Times",
+            "description": "How often the dish was eaten in the last 90 days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meal",
+          "times"
+        ],
+        "title": "UsualMealResponse"
+      },
+      "UsualMealsResponse": {
+        "properties": {
+          "meals": {
+            "items": {
+              "$ref": "#/components/schemas/UsualMealResponse"
+            },
+            "type": "array",
+            "title": "Meals",
+            "description": "Dishes eaten at least twice in the last 90 days, most often eaten first"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meals"
+        ],
+        "title": "UsualMealsResponse"
       },
       "WeeklyReviewResponse": {
         "properties": {

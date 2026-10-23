@@ -71,6 +71,14 @@ async def record_grant_use(session: AsyncSession, grant_id: uuid.UUID, *, now: d
     )
 
 
+async def client_of_access_token(session: AsyncSession, token: str) -> str | None:
+    """The OAuth client an access token was issued to (the app or an AI assistant)."""
+    client_id: str | None = await session.scalar(
+        select(AccessTokenRecord.client_id).where(AccessTokenRecord.token_hash == hash_token(token))
+    )
+    return client_id
+
+
 async def grant_of_access_token(session: AsyncSession, token: str) -> uuid.UUID | None:
     grant_id: uuid.UUID | None = await session.scalar(
         select(AccessTokenRecord.grant_id).where(AccessTokenRecord.token_hash == hash_token(token))

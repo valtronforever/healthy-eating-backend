@@ -271,7 +271,7 @@ class MealPage:
 CLIENT_NAME = OAuthClient.client_info["client_name"].astext
 
 
-def _local(meal: Meal, time_zone: str | None, client_name: str | None) -> LocalMeal:
+def local_meal(meal: Meal, time_zone: str | None, client_name: str | None) -> LocalMeal:
     return LocalMeal(
         meal=meal,
         eaten_at=local_eaten_at(meal.eaten_at, meal.utc_offset_minutes, time_zone),
@@ -279,7 +279,7 @@ def _local(meal: Meal, time_zone: str | None, client_name: str | None) -> LocalM
     )
 
 
-def _with_client_name(query: Select[Meal]) -> Select[Meal, str | None]:
+def with_client_name(query: Select[Meal]) -> Select[Meal, str | None]:
     return query.add_columns(CLIENT_NAME).outerjoin(
         OAuthClient, OAuthClient.client_id == Meal.client_id
     )
@@ -307,14 +307,14 @@ async def list_meals(
         query = query.where(tuple_(Meal.eaten_at, Meal.id) < tuple_(after.eaten_at, after.meal_id))
     query = query.order_by(Meal.eaten_at.desc(), Meal.id.desc()).limit(limit + 1)
 
-    rows = list(await session.execute(_with_client_name(query)))
+    rows = list(await session.execute(with_client_name(query)))
     next_cursor = None
     if len(rows) > limit:
         rows = rows[:limit]
         last = rows[-1][0]
         next_cursor = MealCursor(eaten_at=last.eaten_at, meal_id=last.id)
     return MealPage(
-        meals=[_local(meal, time_zone, name) for meal, name in rows], next_cursor=next_cursor
+        meals=[local_meal(meal, time_zone, name) for meal, name in rows], next_cursor=next_cursor
     )
 
 
@@ -322,11 +322,11 @@ async def get_meal(
     session: AsyncSession, user_id: uuid.UUID, meal_id: uuid.UUID
 ) -> LocalMeal | None:
     query = select(Meal).where(Meal.id == meal_id, Meal.user_id == user_id)
-    row = (await session.execute(_with_client_name(query))).first()
+    row = (await session.execute(with_client_name(query))).first()
     if row is None:
         return None
     meal, client_name = row
-    return _local(meal, await get_time_zone(session, user_id), client_name)
+    return local_meal(meal, await get_time_zone(session, user_id), client_name)
 
 
 async def delete_meal(session: AsyncSession, user_id: uuid.UUID, meal_id: uuid.UUID) -> bool:
@@ -408,4 +408,4 @@ async def edit_meal(
         client_name = await session.scalar(
             select(CLIENT_NAME).where(OAuthClient.client_id == meal.client_id)
         )
-    return EditedMeal(meal=_local(meal, time_zone, client_name), warnings=warnings)
+    return EditedMeal(meal=local_meal(meal, time_zone, client_name), warnings=warnings)

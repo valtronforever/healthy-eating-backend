@@ -569,6 +569,29 @@ async def what_did_i_eat(env: EvalEnvironment, checks: Checks, turns: list[Turn]
     checks.require("no judgment of the intake", not JUDGMENT.search(turn.reply), turn.reply[-300:])
 
 
+async def same_as_yesterday(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    for days in (1, 2):
+        await env.add_meal("Oatmeal with berries", (350, 12, 8, 55), minutes_ago=days * 24 * 60)
+    turn = await env.chat(CHAT.name, "Same breakfast as yesterday.")
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    meals = await env.meals()
+    newest = max(meals, key=lambda meal: meal.created_at) if meals else None
+    checks.require("exactly one new meal", len(meals) == 3, _describe_meals(meals))
+    checks.require(
+        "the same oatmeal with the same values",
+        newest is not None
+        and newest.dish_name.casefold() == "oatmeal with berries"
+        and (newest.calories_kcal, newest.protein_g, newest.fat_g, newest.carbohydrates_g)
+        == (350, 12, 8, 55),
+        _describe_meals(meals),
+    )
+    checks.require("user told it was saved", confirms_saved(turn.reply), turn.reply[-300:])
+    assert env.proxy is not None
+    checks.note("used relog_meal", bool(env.proxy.tool_calls("relog_meal")), "")
+
+
 async def delete_duplicate(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
     await env.add_meal("Oatmeal", (300, 10, 6, 50), minutes_ago=60)
     await env.add_meal("Oatmeal", (300, 10, 6, 50), minutes_ago=58)
@@ -733,6 +756,11 @@ SCENARIOS = [
         "what_did_i_eat",
         "Two saved meals: the assistant reads them back and gives the total, neutrally",
         what_did_i_eat,
+    ),
+    Scenario(
+        "same_as_yesterday",
+        "Same breakfast as yesterday: one new meal with the same values",
+        same_as_yesterday,
     ),
     Scenario(
         "delete_duplicate",

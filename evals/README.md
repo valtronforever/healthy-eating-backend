@@ -72,6 +72,7 @@ second run's reset breaks the first (seen as a failed run and an opencode warm-u
 | `weight_in_pounds` | "Scale says 177.4 lb": one weigh-in of about 80.47 kg, the user is told it was saved, no judgment |
 | `weight_update_request` | "Онови вагу 56кг" (a real message that ChatGPT only kept in its own memory): exactly one weigh-in of 56 kg, the reply names HealthyEating, no judgment |
 | `what_did_i_eat` | Two meals already saved today: the assistant reads them (`get_daily_summary` or `list_meals`), gives the 830 kcal total, logs and deletes nothing, and makes no judgment about the intake |
+| `same_as_yesterday` | Oatmeal saved on the last two days, then "Same breakfast as yesterday.": exactly one new meal with the same name and values, the user is told it was saved (note: `relog_meal` used) |
 | `delete_duplicate` | The same oatmeal saved twice: `delete_meal` is called once, one copy remains, the user is told it was removed |
 | `not_food` | A nutrition question that is not a meal logs nothing |
 
