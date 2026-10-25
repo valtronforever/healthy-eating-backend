@@ -1,6 +1,10 @@
+from typing import Any
+from urllib.parse import parse_qs, urlparse
+
 import httpx
 import pytest
 from pydantic import ValidationError
+from starlette.requests import Request
 
 from healthy_eating.auth.social import SocialLogin, _validate_microsoft_issuer
 from healthy_eating.config import Settings
@@ -60,3 +64,28 @@ async def test_health(http: httpx.AsyncClient) -> None:
     response = await http.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "database": "ok"}
+
+
+@pytest.mark.parametrize("provider", ["google", "microsoft"])
+async def test_google_and_microsoft_always_show_the_account_picker(provider: str) -> None:
+    settings = Settings(
+        _env_file=None,
+        google_client_id="id",
+        google_client_secret="secret",
+        microsoft_client_id="id",
+        microsoft_client_secret="secret",
+    )
+    social = SocialLogin(settings)
+    client = social._oauth.create_client(provider)
+
+    async def metadata() -> dict[str, Any]:
+        # No network in tests: just the endpoint the redirect needs.
+        return {"authorization_endpoint": f"https://{provider}.example/authorize"}
+
+    client.load_server_metadata = metadata
+    request = Request({"type": "http", "method": "GET", "path": "/", "headers": [], "session": {}})
+
+    response = await social.start(request, provider)
+
+    query = parse_qs(urlparse(response.headers["location"]).query)
+    assert query["prompt"] == ["select_account"]

@@ -33,7 +33,7 @@ async def sign_in_to_link(http: httpx.AsyncClient, link_url: str, email: str) ->
     """Open the link page and sign in with the dev login; returns the app callback's params."""
     page = await http.get(link_url)
     assert page.status_code == 200, page.text
-    assert "Add a login" in page.text
+    assert "Link an account" in page.text
     response = await http.post("/auth/dev-login", data={"email": email})
     assert response.status_code == 303, response.text
     location = response.headers["location"]

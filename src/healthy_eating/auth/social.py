@@ -93,6 +93,10 @@ class SocialLogin:
     async def start(self, request: Request, provider: str) -> Response:
         client = self._client(provider)
         extra: dict[str, str] = {}
+        if provider in ("google", "microsoft"):
+            # Always show the account picker: the browser may already be signed in to another
+            # account, and linking a second account of the same provider needs the choice.
+            extra["prompt"] = "select_account"
         if provider == "apple":
             # Apple requires form_post when the `name` or `email` scope is requested.
             extra["response_mode"] = "form_post"

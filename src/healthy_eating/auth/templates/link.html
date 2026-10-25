@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Add a login · Healthy Eating{% endblock %}
+{% block title %}Link an account · Healthy Eating{% endblock %}
 {% block content %}
-  <h1>Add a login</h1>
+  <h1>Link an account</h1>
   <p>
-    Sign in with another provider to add it to your Healthy Eating account. Afterwards you can
-    sign in with either one and see the same data. A login that already belongs to another
-    account is not added.
+    Sign in with the Google, Microsoft or Apple account you want to link to your Healthy Eating
+    account. Afterwards either one signs in to the same data. An account that already signs in to
+    another Healthy Eating account is not linked; Healthy Eating accounts are never merged.
   </p>
 
   <div class="stack">
@@ -20,9 +20,9 @@
 
   {% if dev_login_enabled %}
     <form class="dev stack" method="post" action="{{ url_for('dev_login') }}">
-      <p class="muted">Development login: adds any email address without verification.</p>
+      <p class="muted">Development login: links any email address without verification.</p>
       <input type="email" name="email" placeholder="you@example.com" required>
-      <button type="submit">Add (dev)</button>
+      <button type="submit">Link (dev)</button>
     </form>
   {% endif %}
 
