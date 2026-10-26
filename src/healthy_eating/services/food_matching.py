@@ -188,7 +188,14 @@ def _scaled(food: FoodCandidate, grams: float) -> dict[Micronutrient, float]:
     }
 
 
-async def match_items(session: AsyncSession, items: list[FoodItem]) -> list[ItemMatch]:
+# Search results by item name, shared by the meals of one import (services/data_import.py), so
+# a long history searches each food name once.
+SearchCache = dict[str, list[tuple[FoodCandidate, MatchStatus]]]
+
+
+async def match_items(
+    session: AsyncSession, items: list[FoodItem], search_cache: SearchCache | None = None
+) -> list[ItemMatch]:
     """Each item's reference food and its vitamins and minerals for the item's weight."""
     by_id: dict[int, FoodCandidate] = {}
     ids = {item.food_id for item in items if item.food_id is not None}
@@ -211,7 +218,10 @@ async def match_items(session: AsyncSession, items: list[FoodItem]) -> list[Item
             else:
                 matches.append(ItemMatch(item, "matched", food, _scaled(food, item.grams)))
             continue
-        found = await search_foods(session, item.name, limit=1)
+        cached = None if search_cache is None else search_cache.get(item.name)
+        found = cached if cached is not None else await search_foods(session, item.name, limit=1)
+        if search_cache is not None:
+            search_cache[item.name] = found
         if not found:
             matches.append(ItemMatch(item, "none", None))
             continue

@@ -25,6 +25,7 @@ ERROR_CODES = {
     403: "forbidden",
     404: "not_found",
     409: "conflict",
+    413: "too_large",
     422: "invalid_request",
 }
 
@@ -38,7 +39,7 @@ class ErrorResponse(BaseModel):
     code: str = Field(
         description=(
             "Machine-readable: bad_request, unauthorized, forbidden, not_found, conflict, "
-            "invalid_request or error"
+            "too_large, invalid_request or error"
         )
     )
     message: str = Field(description="Human-readable explanation")

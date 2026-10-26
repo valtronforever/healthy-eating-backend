@@ -72,6 +72,7 @@ async def test_json_export_contains_all_data(
             "date": "2026-10-18",
             "status": "complete",
             "set_by": "user",
+            "from_import": False,
             "updated_at": data["day_statuses"][0]["updated_at"],
         }
     ]

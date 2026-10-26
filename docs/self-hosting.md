@@ -168,9 +168,10 @@ stores, per account:
 | Connections | Registered OAuth clients (assistants, the app) and sign-ins; tokens only as SHA-256 hashes |
 
 The server never logs meal contents, nutrient values, tokens or email addresses. Users can
-download all of their data (`GET /api/v1/export`, format in [export-format.md](export-format.md))
-and delete their account with all data (`DELETE /api/v1/me`); the iOS app will offer both in
-its settings.
+download all of their data (`GET /api/v1/export`, format in [export-format.md](export-format.md)),
+import such an export into another account or server (`POST /api/v1/import`, see the same page),
+and delete their account with all data (`DELETE /api/v1/me`). The iOS app offers all three in
+its settings, so a history moves between servers without database access.
 
 ## Troubleshooting
 

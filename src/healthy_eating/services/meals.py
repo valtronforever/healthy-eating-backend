@@ -17,7 +17,13 @@ from healthy_eating.nutrition.types import (
     NutrientField,
     TrackedNutrientField,
 )
-from healthy_eating.services.food_matching import FoodItem, ItemMatch, match_items, meal_totals
+from healthy_eating.services.food_matching import (
+    FoodItem,
+    ItemMatch,
+    SearchCache,
+    match_items,
+    meal_totals,
+)
 from healthy_eating.services.local_time import (
     local_date_column,
     local_eaten_at,
@@ -204,13 +210,18 @@ class SaveResult:
     matches: list[ItemMatch] | None
 
 
-async def set_items(session: AsyncSession, meal: Meal, items: list[FoodItem]) -> list[ItemMatch]:
+async def set_items(
+    session: AsyncSession,
+    meal: Meal,
+    items: list[FoodItem],
+    search_cache: SearchCache | None = None,
+) -> list[ItemMatch]:
     """Replace the meal's items and their vitamins and minerals (services/food_matching.py).
 
     An item with neither grams nor label values is reported back (status `none`) but not stored:
     it carries nothing, and a stored reference-food item always has a weight.
     """
-    matches = await match_items(session, items)
+    matches = await match_items(session, items, search_cache)
     kept = [m for m in matches if m.item.grams is not None or m.status == "label"]
     meal.items = [
         MealItem(

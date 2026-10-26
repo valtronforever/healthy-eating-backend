@@ -9,6 +9,11 @@ Which days count for averages:
 - otherwise every day with at least one meal, except days marked partial.
 A day without meals never counts, even when marked complete, so an accidental mark on an
 empty day cannot pull averages down.
+
+Imported history (owner decision 2026-10-26) marks the days it adds as complete, or keeps the
+marks of an exported history, so they count either way. Those marks are flagged `from_import`
+and never switch the user to counting complete days only: that stays the user's own choice.
+Marking such a day in the app or chat replaces the import's mark.
 """
 
 import uuid
@@ -27,6 +32,7 @@ from healthy_eating.services.settings import get_time_zone
 # How far after the user's "today" a day may be marked: covers a time zone that is not set
 # yet (UTC) while the user's local day has already moved on.
 FUTURE_MARGIN = timedelta(days=1)
+IMPORT_MARK_BATCH = 1000
 
 
 class FutureDayError(ValueError):
@@ -74,7 +80,12 @@ async def set_day_status(
         .values(user_id=user_id, local_date=local_date, status=status, set_by=set_by)
         .on_conflict_do_update(
             index_elements=[DayStatusRecord.user_id, DayStatusRecord.local_date],
-            set_={"status": status, "set_by": set_by, "updated_at": func.now()},
+            set_={
+                "status": status,
+                "set_by": set_by,
+                "from_import": False,
+                "updated_at": func.now(),
+            },
         )
         .returning(DayStatusRecord)
     )
@@ -111,11 +122,40 @@ async def counts_complete_days_only(session: AsyncSession, user_id: uuid.UUID) -
         await session.scalar(
             select(
                 exists().where(
-                    DayStatusRecord.user_id == user_id, DayStatusRecord.status == "complete"
+                    DayStatusRecord.user_id == user_id,
+                    DayStatusRecord.status == "complete",
+                    DayStatusRecord.from_import.is_(False),
                 )
             )
         )
     )
+
+
+async def mark_imported_days(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    marks: dict[date, tuple[DayStatus, StatusSetter]],
+) -> int:
+    """Mark days that imported history added; a day that already has a mark keeps it."""
+    rows = [
+        {"user_id": user_id, "local_date": day, "status": status, "set_by": set_by}
+        for day, (status, set_by) in sorted(marks.items())
+    ]
+    marked = 0
+    # In parts, to stay far below Postgres' limit of parameters per statement.
+    for start in range(0, len(rows), IMPORT_MARK_BATCH):
+        statement = (
+            insert(DayStatusRecord)
+            .values(
+                [{**row, "from_import": True} for row in rows[start : start + IMPORT_MARK_BATCH]]
+            )
+            .on_conflict_do_nothing(
+                index_elements=[DayStatusRecord.user_id, DayStatusRecord.local_date]
+            )
+            .returning(DayStatusRecord.local_date)
+        )
+        marked += len((await session.scalars(statement)).all())
+    return marked
 
 
 def day_counts(status: DayStatus | None, meal_count: int, *, complete_days_only: bool) -> bool:

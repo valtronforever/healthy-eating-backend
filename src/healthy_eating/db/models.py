@@ -397,6 +397,9 @@ class DayStatusRecord(TimestampMixin, Base):
     local_date: Mapped[date] = mapped_column(primary_key=True)
     status: Mapped[str] = mapped_column(String(8))
     set_by: Mapped[str] = mapped_column(String(9))
+    # Set by an import of earlier history: such a mark makes the day count, but does not switch
+    # the user to counting complete days only (services/days.py).
+    from_import: Mapped[bool] = mapped_column(default=False, server_default=sa_false())
 
 
 class ReferenceData(Base):

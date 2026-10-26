@@ -11,6 +11,9 @@ Nothing is counted twice:
 - a local day that already has meals logged as they were eaten (not imported) is skipped as a
   whole, because the history and the live log would describe the same day.
 
+Days that get imported meals are marked complete (services/days.py:mark_imported_days), so
+the history counts in Trends and the weekly review; a day the user already marked keeps its mark.
+
 Imported meals do not count for usual meals (services/usual_meals.py): those come from what
 the user logs now. An entry may list its food items, which get vitamins and minerals from the
 reference data exactly as in `log_meal`.
@@ -25,6 +28,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from healthy_eating.db.models import Meal
+from healthy_eating.services.days import mark_imported_days
+from healthy_eating.services.food_matching import SearchCache
 from healthy_eating.services.local_time import (
     local_date_column,
     local_eaten_at,
@@ -114,6 +119,7 @@ async def import_meals(
 
     imported: list[Meal] = []
     imported_days: set[date] = set()
+    search_cache: SearchCache = {}
     duplicates = 0
     for _index, meal, when, offset, day in candidates:
         if day in logged_days:
@@ -149,10 +155,13 @@ async def import_meals(
         )
         session.add(row)
         if meal.items is not None:
-            await set_items(session, row, list(meal.items))
+            await set_items(session, row, list(meal.items), search_cache)
         imported.append(row)
         imported_days.add(day)
     await session.flush()
+    await mark_imported_days(
+        session, user_id, {day: ("complete", "assistant") for day in imported_days}
+    )
 
     return ImportResult(
         imported=imported,

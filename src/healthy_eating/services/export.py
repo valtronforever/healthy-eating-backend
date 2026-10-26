@@ -61,7 +61,7 @@ MEAL_COLUMNS = [
     "created_at",
     "updated_at",
 ]
-DAY_STATUS_COLUMNS = ["date", "status", "set_by", "updated_at"]
+DAY_STATUS_COLUMNS = ["date", "status", "set_by", "from_import", "updated_at"]
 WEIGHT_COLUMNS = [
     "weight_id",
     "weight_kg",
@@ -70,6 +70,7 @@ WEIGHT_COLUMNS = [
     "local_date",
     "utc_offset_minutes",
     "source",
+    "external_id",
     "created_at",
     "updated_at",
 ]
@@ -167,6 +168,7 @@ async def _header(session: AsyncSession, user_id: uuid.UUID, now: datetime) -> _
                 "date": status.local_date.isoformat(),
                 "status": status.status,
                 "set_by": status.set_by,
+                "from_import": status.from_import,
                 "updated_at": _iso(status.updated_at),
             }
             for status in statuses
@@ -227,6 +229,7 @@ def _weight(entry: WeightEntry, time_zone: str | None) -> dict[str, Any]:
         "local_date": local.date().isoformat(),
         "utc_offset_minutes": entry.utc_offset_minutes,
         "source": entry.source,
+        "external_id": entry.external_id,
         "created_at": _iso(entry.created_at),
         "updated_at": _iso(entry.updated_at),
     }

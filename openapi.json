@@ -1996,6 +1996,105 @@
         }
       }
     },
+    "/api/v1/import": {
+      "post": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Import Data",
+        "description": "Import a HealthyEating export: its meals, weigh-ins and day marks.\n\nEntries this account already has are skipped, so importing the same file again changes\nnothing. The account, settings and connections stay as they are. Rules:\nservices/data_import.py.",
+        "operationId": "importData",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dry_run",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Check the file and count what would be imported; store nothing",
+              "default": false,
+              "title": "Dry Run"
+            },
+            "description": "Check the file and count what would be imported; store nothing"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a HealthyEating export this server can read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The file is larger than 50 MB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "description": "The JSON file or the ZIP file of GET /api/v1/export",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "application/zip": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/widget-token": {
       "post": {
         "tags": [
@@ -2516,7 +2615,7 @@
           "code": {
             "type": "string",
             "title": "Code",
-            "description": "Machine-readable: bad_request, unauthorized, forbidden, not_found, conflict, invalid_request or error"
+            "description": "Machine-readable: bad_request, unauthorized, forbidden, not_found, conflict, too_large, invalid_request or error"
           },
           "message": {
             "type": "string",
@@ -2714,6 +2813,121 @@
           "current"
         ],
         "title": "GrantResponse"
+      },
+      "ImportCounts": {
+        "properties": {
+          "imported": {
+            "type": "integer",
+            "title": "Imported",
+            "description": "New entries (with dry_run: entries that would be imported)"
+          },
+          "skipped_duplicates": {
+            "type": "integer",
+            "title": "Skipped Duplicates",
+            "description": "Entries this account already has"
+          }
+        },
+        "type": "object",
+        "required": [
+          "imported",
+          "skipped_duplicates"
+        ],
+        "title": "ImportCounts"
+      },
+      "ImportResponse": {
+        "properties": {
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "description": "True when nothing was stored (a preview)"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "json",
+              "csv"
+            ],
+            "title": "Format",
+            "description": "The export file's format"
+          },
+          "exported_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exported At",
+            "description": "When the export was made, if it says"
+          },
+          "meals": {
+            "$ref": "#/components/schemas/ImportCounts"
+          },
+          "weights": {
+            "$ref": "#/components/schemas/ImportCounts"
+          },
+          "days_marked": {
+            "type": "integer",
+            "title": "Days Marked",
+            "description": "Days with imported meals that got a complete or partial mark"
+          },
+          "first_day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Day",
+            "description": "Local day of the earliest imported meal"
+          },
+          "last_day": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Day",
+            "description": "Local day of the latest imported meal"
+          },
+          "rejected_count": {
+            "type": "integer",
+            "title": "Rejected Count",
+            "description": "Entries that are not valid and are left out"
+          },
+          "rejected": {
+            "items": {
+              "$ref": "#/components/schemas/RejectedImportEntry"
+            },
+            "type": "array",
+            "title": "Rejected",
+            "description": "The first 50 entries left out, with the reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dry_run",
+          "format",
+          "exported_at",
+          "meals",
+          "weights",
+          "days_marked",
+          "first_day",
+          "last_day",
+          "rejected_count",
+          "rejected"
+        ],
+        "title": "ImportResponse"
       },
       "IntegrationStatusResponse": {
         "properties": {
@@ -3823,6 +4037,34 @@
           "max"
         ],
         "title": "ReferenceRangeModel"
+      },
+      "RejectedImportEntry": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "meal",
+              "weight"
+            ],
+            "title": "Kind"
+          },
+          "index": {
+            "type": "integer",
+            "title": "Index",
+            "description": "Position among the file's meals or weigh-ins, from 0"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "index",
+          "reason"
+        ],
+        "title": "RejectedImportEntry"
       },
       "RevokeResponse": {
         "properties": {
