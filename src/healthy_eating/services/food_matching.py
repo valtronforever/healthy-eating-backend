@@ -21,8 +21,10 @@ matches thousands of foods). Ranking, best first:
 7. the dataset (FNDDS, then Foundation Foods, then SR Legacy).
 
 `matched` needs every item word (cooking words aside); `weak` (at least half) and `none` give no
-values, so nothing is invented from a doubtful match. Amounts scale linearly with grams; a
-nutrient the food has no value for stays unknown, it never counts as zero.
+values, so nothing is invented from a doubtful match. An item with label values (a supplement,
+a packaged food) is not matched: its values are used as given, with the status `label`.
+Amounts scale linearly with grams; a nutrient the food has no value for stays unknown, it never
+counts as zero.
 """
 
 from dataclasses import dataclass, field
@@ -64,9 +66,12 @@ GENERAL = frozenset({"nfs", "ns", "plain", "raw"})
 @dataclass(frozen=True)
 class FoodItem:
     name: str
-    grams: float
+    # Weight eaten; may be None only for an item with label values (a capsule).
+    grams: float | None
     # A reference food chosen by id; None to match by name.
     food_id: int | None = None
+    # Values from the item's label or the user, for the amount taken; used as they are.
+    label_values: dict[Micronutrient, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -193,6 +198,12 @@ async def match_items(session: AsyncSession, items: list[FoodItem]) -> list[Item
 
     matches = []
     for item in items:
+        if item.label_values is not None:
+            matches.append(ItemMatch(item, "label", None, dict(item.label_values)))
+            continue
+        if item.grams is None:
+            matches.append(ItemMatch(item, "none", None))
+            continue
         if item.food_id is not None:
             food = by_id.get(item.food_id)
             if food is None:

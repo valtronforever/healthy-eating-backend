@@ -202,3 +202,78 @@ async def test_items_are_exported_and_deleted_with_their_meal(
             select(func.count()).select_from(MealItem).where(MealItem.meal_id == uuid.UUID(meal_id))
         )
     assert left == 0
+
+
+SUPPLEMENTS: dict[str, Any] = {
+    "dish_name": "Daily supplements",
+    "source": "from_conversation",
+    "calories_kcal": 10,
+    "protein_g": 0,
+    "fat_g": 1,
+    "carbohydrates_g": 0,
+    "confidence": "high",
+}
+
+
+async def test_supplements_get_their_label_values(app: FastAPI, http: httpx.AsyncClient) -> None:
+    owner = await account(http, "hal.label@example.com")
+    items = [
+        {"name": "Vitamin D3 capsule", "label_values": {"vitamin_d_ug": 50}},
+        {"name": "Magnesium citrate, 2 tablets", "label_values": {"magnesium_mg": 200}},
+        {"name": "boiled rice", "grams": 100},
+    ]
+
+    result = await call(app, owner, "log_meal", {**SUPPLEMENTS, "items": items})
+
+    assert [i["status"] for i in result["items"]] == ["label", "label", "matched"]
+    meal = await rest_meal(http, owner, result["meal"]["meal_id"])
+    assert meal["label_items"] == [
+        {"name": "Vitamin D3 capsule", "grams": None, "values": {"vitamin_d_ug": 50}},
+        {"name": "Magnesium citrate, 2 tablets", "grams": None, "values": {"magnesium_mg": 200}},
+    ]
+    # Reference-food items stay in `items`; label items are not repeated there.
+    assert [i["name"] for i in meal["items"]] == ["boiled rice"]
+    rice = await food(app, "Rice, cooked, NFS")
+    assert meal["micronutrients"]["vitamin_d_ug"] == 50 + rice.nutrients.get("vitamin_d_ug", 0)
+    assert meal["micronutrients"]["magnesium_mg"] == pytest.approx(
+        200 + rice.nutrients["magnesium_mg"], abs=0.001
+    )
+    day = meal["local_date"]
+    days = await http.get("/api/v1/days", params={"from": day, "to": day}, headers=owner.headers)
+    assert days.json()["days"][0]["micronutrients"]["vitamin_d_ug"]["meal_count"] == 1
+
+
+async def test_an_item_without_grams_or_label_values_is_skipped(
+    app: FastAPI, http: httpx.AsyncClient
+) -> None:
+    owner = await account(http, "ivy.label@example.com")
+    items = [{"name": "fish oil"}, {"name": "boiled rice", "grams": 100}]
+
+    # The meal is still saved; only the item without an amount carries nothing.
+    result = await call(app, owner, "log_meal", {**SUPPLEMENTS, "items": items})
+
+    assert [i["status"] for i in result["items"]] == ["none", "matched"]
+    meal = await rest_meal(http, owner, result["meal"]["meal_id"])
+    assert [i["name"] for i in meal["items"]] == ["boiled rice"]
+    assert meal["label_items"] == []
+
+
+async def test_relogging_supplements_copies_their_label_values(
+    app: FastAPI, http: httpx.AsyncClient
+) -> None:
+    owner = await account(http, "jo.label@example.com")
+    items = [{"name": "Zinc 15 mg tablet", "label_values": {"zinc_mg": 15}}]
+    first = await call(app, owner, "log_meal", {**SUPPLEMENTS, "items": items})
+
+    response = await http.post(
+        f"/api/v1/meals/{first['meal']['meal_id']}/relog",
+        json={"id": str(uuid.uuid4())},
+        headers=owner.headers,
+    )
+
+    assert response.status_code == 201, response.text
+    copy = response.json()
+    assert copy["label_items"] == [
+        {"name": "Zinc 15 mg tablet", "grams": None, "values": {"zinc_mg": 15}}
+    ]
+    assert copy["micronutrients"] == {"zinc_mg": 15}

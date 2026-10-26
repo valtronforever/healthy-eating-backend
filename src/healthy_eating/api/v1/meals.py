@@ -48,6 +48,14 @@ class MealItemResponse(BaseModel):
     food_description: str | None = Field(description="The USDA food used, when matched")
 
 
+class LabelItemResponse(BaseModel):
+    name: str
+    grams: float | None = Field(description="Weight, if known (a capsule has none)")
+    values: dict[Micronutrient, float] = Field(
+        description="Vitamins and minerals from the label, for the amount taken"
+    )
+
+
 class MealResponse(BaseModel):
     id: uuid.UUID
     dish_name: str
@@ -81,7 +89,15 @@ class MealResponse(BaseModel):
             "has a value for is left out"
         )
     )
-    items: list[MealItemResponse] = Field(description="The meal's food items, in order")
+    items: list[MealItemResponse] = Field(
+        description="The meal's food items matched against USDA reference data, in order"
+    )
+    label_items: list[LabelItemResponse] = Field(
+        description=(
+            "Items whose vitamins and minerals come from their label or the user (supplements, "
+            "packaged foods), in order; included in `micronutrients`"
+        )
+    )
     imported_from: str | None = Field(
         description=(
             "Set for meals imported from the user's earlier tracking (e.g. 'ChatGPT project'); "
@@ -173,6 +189,12 @@ def _meal_response(local: LocalMeal) -> MealResponse:
                 food_description=item.food_description,
             )
             for item in meal.items
+            if item.status != "label" and item.grams is not None
+        ],
+        label_items=[
+            LabelItemResponse(name=item.name, grams=item.grams, values=item.label_values or {})
+            for item in meal.items
+            if item.status == "label"
         ],
         estimated_fields=meal.estimated_fields,
         confidence=meal.confidence,

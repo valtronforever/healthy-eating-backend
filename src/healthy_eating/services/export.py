@@ -205,6 +205,7 @@ def _meal(meal: Meal, client_name: str | None, time_zone: str | None) -> dict[st
                 "status": item.status,
                 "food_id": item.food_id,
                 "food_description": item.food_description,
+                "label_values": item.label_values,
             }
             for item in meal.items
         ],

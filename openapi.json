@@ -2767,6 +2767,63 @@
         ],
         "title": "IntegrationStatusResponse"
       },
+      "LabelItemResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "grams": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grams",
+            "description": "Weight, if known (a capsule has none)"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "propertyNames": {
+              "enum": [
+                "vitamin_a_ug",
+                "vitamin_c_mg",
+                "vitamin_d_ug",
+                "vitamin_e_mg",
+                "vitamin_k_ug",
+                "thiamin_mg",
+                "riboflavin_mg",
+                "niacin_mg",
+                "vitamin_b6_mg",
+                "folate_ug",
+                "vitamin_b12_ug",
+                "calcium_mg",
+                "iron_mg",
+                "magnesium_mg",
+                "phosphorus_mg",
+                "potassium_mg",
+                "zinc_mg",
+                "selenium_ug"
+              ]
+            },
+            "type": "object",
+            "title": "Values",
+            "description": "Vitamins and minerals from the label, for the amount taken"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "grams",
+          "values"
+        ],
+        "title": "LabelItemResponse"
+      },
       "LeftOutDayResponse": {
         "properties": {
           "local_date": {
@@ -3010,7 +3067,8 @@
             "enum": [
               "matched",
               "weak",
-              "none"
+              "none",
+              "label"
             ],
             "title": "Status",
             "description": "'matched': its vitamins and minerals come from `food_description`"
@@ -3260,7 +3318,15 @@
             },
             "type": "array",
             "title": "Items",
-            "description": "The meal's food items, in order"
+            "description": "The meal's food items matched against USDA reference data, in order"
+          },
+          "label_items": {
+            "items": {
+              "$ref": "#/components/schemas/LabelItemResponse"
+            },
+            "type": "array",
+            "title": "Label Items",
+            "description": "Items whose vitamins and minerals come from their label or the user (supplements, packaged foods), in order; included in `micronutrients`"
           },
           "imported_from": {
             "anyOf": [
@@ -3342,6 +3408,7 @@
           "source_note",
           "micronutrients",
           "items",
+          "label_items",
           "imported_from",
           "estimated_fields",
           "confidence",

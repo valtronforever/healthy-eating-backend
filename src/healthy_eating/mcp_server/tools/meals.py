@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from healthy_eating.db import Database
 from healthy_eating.db.models import Meal
 from healthy_eating.mcp_server.context import current_client_id, current_user_id
-from healthy_eating.nutrition.micronutrients import ItemMatchStatus
+from healthy_eating.nutrition.micronutrients import ItemMatchStatus, Micronutrient
 from healthy_eating.nutrition.types import (
     NUTRIENT_FIELDS,
     Confidence,
@@ -90,6 +90,11 @@ Vitamins and minerals:
 - The result says which reference food each item matched. If an item matched nothing or the
   wrong food, you may look it up with find_foods and correct the meal with `replaces_meal_id`
   and the item's `food_id`. Do not mention vitamins and minerals unless the user asks.
+- Supplements and packaged foods: pass the item with `label_values`, the vitamins and minerals
+  printed on the label or stated by the user, for the amount taken (2 capsules = twice the
+  label), converted to the unit in each key (vitamin D: 40 IU = 1 ug). Leave out a value you
+  cannot read or convert exactly (for example vitamin A or E given only in IU); never estimate
+  label values. Calories stay as for any meal (often near 0 for supplements).
 """
 
 FIELD_LABELS: dict[NutrientField, str] = {
@@ -99,6 +104,8 @@ FIELD_LABELS: dict[NutrientField, str] = {
     "carbohydrates_g": "carbohydrates",
 }
 MAX_FIBER_OR_SUGAR_G = MAX_MACRONUTRIENT_G
+# Upper bound for one label value in mg or ug (high-dose supplements stay far below).
+MAX_LABEL_VALUE = 100_000
 
 
 class SavedMeal(BaseModel):
@@ -127,18 +134,35 @@ class MealItemInput(BaseModel):
         max_length=MAX_DISH_NAME_LENGTH,
         description="The food, plainly, e.g. 'white rice, cooked', 'chicken breast, grilled'",
     )
-    grams: float = Field(gt=0, le=MAX_PORTION_GRAMS, description="Weight eaten, g")
+    grams: float | None = Field(
+        default=None,
+        gt=0,
+        le=MAX_PORTION_GRAMS,
+        description=(
+            "Weight eaten, g; without it (and without label_values) the item gets no values"
+        ),
+    )
     food_id: int | None = Field(
         default=None, description="A food_id from find_foods, when the name matched wrongly"
+    )
+    label_values: dict[Micronutrient, Annotated[float, Field(ge=0, le=MAX_LABEL_VALUE)]] | None = (
+        Field(
+            default=None,
+            description=(
+                "Only for supplements or packaged foods: vitamins and minerals printed on the "
+                "label or stated by the user, for the amount taken, in the unit of each key "
+                "(mg or ug)"
+            ),
+        )
     )
 
 
 class ItemResult(BaseModel):
     name: str
-    grams: float
+    grams: float | None
     status: ItemMatchStatus = Field(
-        description="'matched': vitamins and minerals come from `matched_food`; 'weak' or "
-        "'none': this item has none (see find_foods)"
+        description="'matched': vitamins and minerals come from `matched_food`; 'label': from "
+        "the label values you passed; 'weak' or 'none': this item has none (see find_foods)"
     )
     matched_food: str | None = Field(description="The USDA food used, when matched")
     food_id: int | None = Field(description="Its food_id, when matched")
@@ -381,7 +405,7 @@ def register(mcp: FastMCP, db: Database) -> None:
                 replaces_meal_id=replaces_meal_id,
                 open_questions=open_questions or [],
                 items=(
-                    tuple(FoodItem(i.name, i.grams, i.food_id) for i in items)
+                    tuple(FoodItem(i.name, i.grams, i.food_id, i.label_values) for i in items)
                     if items is not None
                     else None
                 ),

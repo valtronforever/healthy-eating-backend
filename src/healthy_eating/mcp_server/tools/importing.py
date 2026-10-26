@@ -42,8 +42,9 @@ eaten now, use log_meal.
   protein, fat and carbohydrates (calories may be left out when the three macros are given).
 - Set `eaten_at` from the history, with the user's UTC offset if known; when only the date is
   known, use 12:00 that day.
-- When the history names the foods and amounts of a meal, also pass `items` (as in log_meal)
-  for vitamins and minerals; leave them out for day totals or when the foods are unclear.
+- When the history names the foods and their amounts of a meal, also pass `items` (as in
+  log_meal) for vitamins and minerals; leave them out for day totals, or when the history has no
+  amounts (an item without grams gets no values).
 - At most 100 entries per call: for a longer history, call again with the next entries. Entries
   already in HealthyEating are skipped, so a repeated call never counts a meal twice, and days
   that already have meals logged in HealthyEating are left as they are.
@@ -181,7 +182,7 @@ def register(mcp: FastMCP, db: Database) -> None:
                 confidence=meal.confidence,
                 eaten_at=meal.eaten_at,
                 items=(
-                    tuple(FoodItem(i.name, i.grams, i.food_id) for i in meal.items)
+                    tuple(FoodItem(i.name, i.grams, i.food_id, i.label_values) for i in meal.items)
                     if meal.items is not None
                     else None
                 ),

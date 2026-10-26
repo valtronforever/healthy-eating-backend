@@ -68,9 +68,10 @@ MICRONUTRIENT_INFO: dict[Micronutrient, MicronutrientInfo] = {
 ReferenceDataset = Literal["fndds", "foundation", "sr_legacy"]
 REFERENCE_DATASETS: tuple[ReferenceDataset, ...] = get_args(ReferenceDataset)
 
-# How a meal's food item matched the reference data (services/food_matching.py): only
-# `matched` items have values.
-ItemMatchStatus = Literal["matched", "weak", "none"]
+# How a meal's food item got its values (services/food_matching.py): `matched` from the USDA
+# reference data, `label` from its label or the user (supplements, packaged foods); `weak` and
+# `none` have no values.
+ItemMatchStatus = Literal["matched", "weak", "none", "label"]
 ITEM_MATCH_STATUSES: tuple[ItemMatchStatus, ...] = get_args(ItemMatchStatus)
 
 # Optional reference group for vitamin and mineral reference ranges (Settings; off by default).

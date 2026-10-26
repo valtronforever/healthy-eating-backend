@@ -313,7 +313,9 @@ class MealItem(Base):
     __tablename__ = "meal_items"
     __table_args__ = (
         CheckConstraint(_one_of("status", ITEM_MATCH_STATUSES), name="status"),
-        CheckConstraint("grams > 0", name="grams_positive"),
+        CheckConstraint("grams IS NULL OR grams > 0", name="grams_positive"),
+        # Only a label item may have no weight (a capsule); reference foods scale with grams.
+        CheckConstraint("status = 'label' OR grams IS NOT NULL", name="grams_unless_label"),
     )
 
     meal_id: Mapped[uuid.UUID] = mapped_column(
@@ -321,11 +323,15 @@ class MealItem(Base):
     )
     position: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     name: Mapped[str] = mapped_column(String(200))
-    grams: Mapped[float]
+    # NULL only for label items without a weight.
+    grams: Mapped[float | None]
     status: Mapped[str] = mapped_column(String(8))
     # The USDA food (fdc_id) and its description, only for `matched` items.
     food_id: Mapped[int | None]
     food_description: Mapped[str | None] = mapped_column(Text)
+    # Vitamins and minerals from the item's label or the user (status `label`), for the amount
+    # taken, in the units of the codes; never estimated.
+    label_values: Mapped[dict[str, float] | None] = mapped_column(JSONB)
 
 
 class WeightEntry(TimestampMixin, Base):

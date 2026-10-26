@@ -205,8 +205,13 @@ class SaveResult:
 
 
 async def set_items(session: AsyncSession, meal: Meal, items: list[FoodItem]) -> list[ItemMatch]:
-    """Replace the meal's items and their vitamins and minerals (services/food_matching.py)."""
+    """Replace the meal's items and their vitamins and minerals (services/food_matching.py).
+
+    An item with neither grams nor label values is reported back (status `none`) but not stored:
+    it carries nothing, and a stored reference-food item always has a weight.
+    """
     matches = await match_items(session, items)
+    kept = [m for m in matches if m.item.grams is not None or m.status == "label"]
     meal.items = [
         MealItem(
             position=position,
@@ -217,11 +222,12 @@ async def set_items(session: AsyncSession, meal: Meal, items: list[FoodItem]) ->
             food_description=(
                 match.food.description if match.status == "matched" and match.food else None
             ),
+            label_values=dict(match.nutrients) if match.status == "label" else None,
         )
-        for position, match in enumerate(matches)
+        for position, match in enumerate(kept)
     ]
     meal.micronutrients = {
-        code: round(total.amount, 3) for code, total in meal_totals(matches).items()
+        code: round(total.amount, 3) for code, total in meal_totals(kept).items()
     }
     return matches
 

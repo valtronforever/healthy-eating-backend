@@ -127,6 +127,7 @@ async def relog_meal(
                 status=item.status,
                 food_id=item.food_id,
                 food_description=item.food_description,
+                label_values=dict(item.label_values) if item.label_values is not None else None,
             )
             for item in original.items
         ],

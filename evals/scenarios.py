@@ -628,6 +628,34 @@ async def meal_items(env: EvalEnvironment, checks: Checks, turns: list[Turn]) ->
     )
 
 
+async def supplements(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    turn = await env.chat(
+        CHAT.name,
+        "I just took my daily supplements, one capsule each: vitamin D3 2000 IU, magnesium "
+        "200 mg and zinc 15 mg.",
+    )
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    meals = await env.meals()
+    checks.require("one meal saved", len(meals) == 1, _describe_meals(meals))
+    if len(meals) != 1:
+        return
+    async with env.db.session() as session:
+        meal = await session.get(Meal, meals[0].id)
+        assert meal is not None
+        labels = [item.label_values for item in meal.items if item.status == "label"]
+        micronutrients = meal.micronutrients or {}
+    checks.require("label values sent", len(labels) >= 1, str(labels))
+    expected = {"vitamin_d_ug": 50, "magnesium_mg": 200, "zinc_mg": 15}
+    checks.require(
+        "label values stored, IU converted",
+        all(abs(micronutrients.get(code, 0) - value) < 0.5 for code, value in expected.items()),
+        str(micronutrients),
+    )
+    checks.require("user told it was saved", confirms_saved(turn.reply), turn.reply[-300:])
+
+
 # Four meals over three days, as a ChatGPT calorie project would list them.
 HISTORY_VALUES = {
     (1, (350, 12, 8, 55)),
@@ -845,6 +873,11 @@ SCENARIOS = [
         "meal_items",
         "A described meal is sent with its foods and grams, so it gets vitamins and minerals",
         meal_items,
+    ),
+    Scenario(
+        "supplements",
+        "Supplements get the vitamins and minerals from their label, IU converted",
+        supplements,
     ),
     Scenario(
         "import_history",
