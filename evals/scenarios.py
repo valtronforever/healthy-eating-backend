@@ -19,7 +19,12 @@ from healthy_eating.nutrition.types import NUTRIENT_FIELDS, OPTIONAL_NUTRIENT_FI
 from healthy_eating.services.settings import SettingsChanges, TargetRange
 
 HEALTHY_EATING = re.compile(r"healthy ?eating", re.IGNORECASE)
-POSITIVE = re.compile(r"\b(saved|updated|logged|recorded|added)\b", re.IGNORECASE)
+POSITIVE = re.compile(
+    r"\b(saved|updated|logged|recorded|added|imported)\b"
+    # "They're in HealthyEating", "it is now in HealthyEating"
+    r"|(?:\b(?:are|is)|['\u2019](?:re|s))\s+(?:all\s+|now\s+)?in\s+healthy ?eating",
+    re.IGNORECASE,
+)
 NEGATIVE = re.compile(
     r"\b(not|never|unable|failed|couldn['\u2019]?t|wasn['\u2019]?t|didn['\u2019]?t|isn['\u2019]?t)\b",
     re.IGNORECASE,
@@ -592,6 +597,44 @@ async def same_as_yesterday(env: EvalEnvironment, checks: Checks, turns: list[Tu
     checks.note("used relog_meal", bool(env.proxy.tool_calls("relog_meal")), "")
 
 
+# Four meals over three days, as a ChatGPT calorie project would list them.
+HISTORY_VALUES = {
+    (1, (350, 12, 8, 55)),
+    (1, (640, 42, 22, 60)),
+    (2, (310, 18, 9, 38)),
+    (3, (520, 35, 18, 50)),
+}
+
+
+async def import_history(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    turn = await env.chat(
+        CHAT.name,
+        "Here is my food log from my ChatGPT calorie project for this month. Please add it to "
+        "HealthyEating.\n"
+        "Oct 1: breakfast oatmeal 350 kcal (P 12 g, F 8 g, C 55 g); dinner salmon with rice "
+        "640 kcal (P 42 g, F 22 g, C 60 g)\n"
+        "Oct 2: breakfast yogurt with granola 310 kcal (P 18 g, F 9 g, C 38 g)\n"
+        "Oct 3: lunch chicken wrap 520 kcal (P 35 g, F 18 g, C 50 g)",
+    )
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    assert env.proxy is not None
+    checks.require("import_meals used", bool(env.proxy.tool_calls("import_meals")), "")
+    meals = await env.meals()
+    checks.require(
+        "four imported meals, nothing else",
+        len(meals) == 4 and all(meal.imported_from for meal in meals),
+        _describe_meals(meals),
+    )
+    saved = {(meal.eaten_at.day, _values(meal)) for meal in meals}
+    checks.require(
+        "values unchanged, on their days", saved == HISTORY_VALUES, _describe_meals(meals)
+    )
+    checks.require("user told it was imported", confirms_saved(turn.reply), turn.reply[-300:])
+    checks.note("log_meal not used", not env.proxy.tool_calls("log_meal"), "")
+
+
 async def delete_duplicate(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
     await env.add_meal("Oatmeal", (300, 10, 6, 50), minutes_ago=60)
     await env.add_meal("Oatmeal", (300, 10, 6, 50), minutes_ago=58)
@@ -766,6 +809,11 @@ SCENARIOS = [
         "delete_duplicate",
         "A meal saved twice: the assistant deletes exactly one copy",
         delete_duplicate,
+    ),
+    Scenario(
+        "import_history",
+        "History pasted from a ChatGPT project is imported unchanged on its days",
+        import_history,
     ),
     Scenario("server_error", "When saving fails, the user is told it was not saved", server_error),
     Scenario("not_food", "A food question that is not a meal logs nothing", not_food),

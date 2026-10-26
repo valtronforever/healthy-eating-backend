@@ -65,6 +65,7 @@ their meaning.
 | `fiber_g`, `sugar_g`, `sodium_mg` | Optional values for the whole portion (sodium in mg); empty when not known |
 | `source` | `from_conversation` (numbers from the user's own workflow) or `estimated_by_assistant` |
 | `source_note` | Where existing numbers came from, e.g. "Google Sheets log" |
+| `imported_from` | For meals imported from earlier tracking: where they came from, e.g. "ChatGPT project"; empty/null otherwise |
 | `estimated_fields` | Values the assistant estimated (JSON list; in CSV joined with `;`) |
 | `confidence` | `high`, `medium` or `low` |
 | `client_name` | The AI assistant that first saved the meal, if known |

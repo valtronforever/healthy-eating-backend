@@ -3144,6 +3144,18 @@
             ],
             "title": "Source Note"
           },
+          "imported_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported From",
+            "description": "Set for meals imported from the user's earlier tracking (e.g. 'ChatGPT project'); null for meals logged as they were eaten"
+          },
           "estimated_fields": {
             "items": {
               "type": "string",
@@ -3210,6 +3222,7 @@
           "sodium_mg",
           "source",
           "source_note",
+          "imported_from",
           "estimated_fields",
           "confidence",
           "client_name",

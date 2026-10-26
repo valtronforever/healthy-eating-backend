@@ -64,6 +64,12 @@ class MealResponse(BaseModel):
         )
     )
     source_note: str | None
+    imported_from: str | None = Field(
+        description=(
+            "Set for meals imported from the user's earlier tracking (e.g. 'ChatGPT project'); "
+            "null for meals logged as they were eaten"
+        )
+    )
     estimated_fields: list[TrackedNutrientField] = Field(
         description="Values the assistant estimated rather than took from the user's workflow"
     )
@@ -139,6 +145,7 @@ def _meal_response(local: LocalMeal) -> MealResponse:
         sodium_mg=meal.sodium_mg,
         source=meal.source,
         source_note=meal.source_note,
+        imported_from=meal.imported_from,
         estimated_fields=meal.estimated_fields,
         confidence=meal.confidence,
         client_name=local.client_name,

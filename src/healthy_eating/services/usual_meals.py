@@ -1,7 +1,8 @@
 """Usual meals: the meals a user eats again, and re-logging one (healthy-eating-backend#26).
 
 A dish is usual when its name (case and spacing ignored) was eaten at least twice in the last
-90 days. The latest of those meals is the template, so a correction of it counts.
+90 days. The latest of those meals is the template, so a correction of it counts. Imported
+history does not count: it may hold day totals instead of dishes.
 
 Re-logging copies the template's name, description, portion, values (optional nutrients too),
 `source`, `source_note`, `estimated_fields` and `confidence` (decision healthy-eating-ios#13):
@@ -47,6 +48,8 @@ async def usual_meals(
     query = (
         select(Meal)
         .where(Meal.user_id == user_id, Meal.eaten_at >= now - timedelta(days=USUAL_DAYS))
+        # Imported history (services/meal_import.py) may hold day totals, not dishes.
+        .where(Meal.imported_from.is_(None))
         .order_by(Meal.eaten_at.desc(), Meal.id.desc())
     )
     rows = list(await session.execute(with_client_name(query)))

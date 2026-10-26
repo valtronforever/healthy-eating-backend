@@ -271,6 +271,9 @@ class Meal(TimestampMixin, Base):
     client_id: Mapped[str | None] = mapped_column(
         ForeignKey("oauth_clients.client_id", ondelete="SET NULL")
     )
+    # Set for meals imported from the user's earlier tracking (services/meal_import.py), e.g.
+    # "ChatGPT project" or "Google Sheets"; NULL for meals logged as they were eaten.
+    imported_from: Mapped[str | None] = mapped_column(String(100))
 
 
 class WeightEntry(TimestampMixin, Base):
