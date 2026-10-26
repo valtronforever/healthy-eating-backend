@@ -146,6 +146,7 @@ async def _header(session: AsyncSession, user_id: uuid.UUID, now: datetime) -> _
             "calm_mode": settings.calm_mode,
             "weight_tracking": settings.weight_tracking,
             "weight_unit": settings.weight_unit,
+            "reference_group": settings.reference_group,
             "targets": {
                 name: None if target is None else {"min": target.min, "max": target.max}
                 for name, target in settings.targets.items()
@@ -316,7 +317,14 @@ def _write_csv(
 def _settings_rows(settings: dict[str, Any]) -> list[dict[str, Any]]:
     rows = [
         {"setting": name, "value": settings[name]}
-        for name in ("timezone", "energy_unit", "calm_mode", "weight_tracking", "weight_unit")
+        for name in (
+            "timezone",
+            "energy_unit",
+            "calm_mode",
+            "weight_tracking",
+            "weight_unit",
+            "reference_group",
+        )
     ]
     for nutrient, target in settings["targets"].items():
         for bound in ("min", "max"):

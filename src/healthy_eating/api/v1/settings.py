@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
 from healthy_eating.api.errors import error_response
+from healthy_eating.nutrition.micronutrients import REFERENCE_INTAKES, Micronutrient, ReferenceGroup
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, EnergyUnit, NutrientField, WeightUnit
 from healthy_eating.services.settings import (
     InvalidSettingsError,
@@ -44,6 +45,11 @@ class Targets(BaseModel):
     carbohydrates_g: TargetRangeModel | None = None
 
 
+class ReferenceRangeModel(BaseModel):
+    min: float
+    max: float | None
+
+
 class SettingsResponse(BaseModel):
     timezone: str | None = Field(
         description="IANA time zone, e.g. 'Europe/Berlin'; null if unknown"
@@ -58,6 +64,16 @@ class SettingsResponse(BaseModel):
         )
     )
     weight_unit: WeightUnit = Field(description="Unit to show weight in; values stay in kg")
+    reference_group: ReferenceGroup | None = Field(
+        description="Reference values for vitamins and minerals; null when off (the default)"
+    )
+    micronutrient_references: dict[Micronutrient, ReferenceRangeModel] = Field(
+        description=(
+            "The group's reference range per vitamin and mineral (unit: the code's suffix): `min` "
+            "is the RDA or AI, `max` the upper limit where it applies to food, else null. US "
+            "Dietary Reference Intakes, adults 19 to 50. Empty when reference_group is null"
+        )
+    )
 
 
 class SettingsUpdate(BaseModel):
@@ -69,6 +85,9 @@ class SettingsUpdate(BaseModel):
     targets: Targets | None = None
     weight_tracking: bool | None = None
     weight_unit: WeightUnit | None = None
+    reference_group: ReferenceGroup | None = Field(
+        default=None, description="null turns the reference values off"
+    )
 
     @field_validator("timezone")
     @classmethod
@@ -103,6 +122,7 @@ class SettingsUpdate(BaseModel):
             targets=targets,
             weight_tracking=self.weight_tracking if self.weight_tracking is not None else UNSET,
             weight_unit=self.weight_unit if self.weight_unit is not None else UNSET,
+            reference_group=self.reference_group if "reference_group" in fields else UNSET,
         )
 
 
@@ -118,6 +138,13 @@ def _response(settings: UserSettings) -> SettingsResponse:
         targets=Targets(**targets),
         weight_tracking=settings.weight_tracking,
         weight_unit=settings.weight_unit,
+        reference_group=settings.reference_group,
+        micronutrient_references={
+            code: ReferenceRangeModel(min=reference.min, max=reference.max)
+            for code, reference in (
+                REFERENCE_INTAKES[settings.reference_group] if settings.reference_group else {}
+            ).items()
+        },
     )
 
 

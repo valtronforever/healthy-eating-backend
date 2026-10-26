@@ -19,7 +19,11 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from healthy_eating.db.base import Base, TimestampMixin
-from healthy_eating.nutrition.micronutrients import ITEM_MATCH_STATUSES, REFERENCE_DATASETS
+from healthy_eating.nutrition.micronutrients import (
+    ITEM_MATCH_STATUSES,
+    REFERENCE_DATASETS,
+    REFERENCE_GROUPS,
+)
 from healthy_eating.nutrition.types import (
     CONFIDENCE_VALUES,
     DAY_STATUSES,
@@ -55,6 +59,7 @@ class User(TimestampMixin, Base):
     __table_args__ = (
         CheckConstraint(_one_of("energy_unit", ENERGY_UNITS), name="energy_unit"),
         CheckConstraint(_one_of("weight_unit", WEIGHT_UNITS), name="weight_unit"),
+        CheckConstraint(_one_of("reference_group", REFERENCE_GROUPS), name="reference_group"),
         *(
             CheckConstraint(_target_range(field), name=f"target_{field}")
             for field in NUTRIENT_FIELDS
@@ -74,6 +79,8 @@ class User(TimestampMixin, Base):
     # turns it on. Off hides weight; the entries stay until the user deletes them.
     weight_tracking: Mapped[bool] = mapped_column(default=False, server_default=sa_false())
     weight_unit: Mapped[str] = mapped_column(String(2), default="kg", server_default="kg")
+    # Reference values for vitamins and minerals (nutrition/micronutrients.py); NULL = off.
+    reference_group: Mapped[str | None] = mapped_column(String(16))
     # Daily target ranges in canonical units; either bound may be open (NULL).
     target_calories_kcal_min: Mapped[float | None]
     target_calories_kcal_max: Mapped[float | None]

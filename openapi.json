@@ -3732,6 +3732,31 @@
         ],
         "title": "ProteinBucketResponse"
       },
+      "ReferenceRangeModel": {
+        "properties": {
+          "min": {
+            "type": "number",
+            "title": "Min"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          }
+        },
+        "type": "object",
+        "required": [
+          "min",
+          "max"
+        ],
+        "title": "ReferenceRangeModel"
+      },
       "RevokeResponse": {
         "properties": {
           "grant_id": {
@@ -3795,6 +3820,52 @@
             ],
             "title": "Weight Unit",
             "description": "Unit to show weight in; values stay in kg"
+          },
+          "reference_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "adult_women",
+                  "adult_men"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Group",
+            "description": "Reference values for vitamins and minerals; null when off (the default)"
+          },
+          "micronutrient_references": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ReferenceRangeModel"
+            },
+            "propertyNames": {
+              "enum": [
+                "vitamin_a_ug",
+                "vitamin_c_mg",
+                "vitamin_d_ug",
+                "vitamin_e_mg",
+                "vitamin_k_ug",
+                "thiamin_mg",
+                "riboflavin_mg",
+                "niacin_mg",
+                "vitamin_b6_mg",
+                "folate_ug",
+                "vitamin_b12_ug",
+                "calcium_mg",
+                "iron_mg",
+                "magnesium_mg",
+                "phosphorus_mg",
+                "potassium_mg",
+                "zinc_mg",
+                "selenium_ug"
+              ]
+            },
+            "type": "object",
+            "title": "Micronutrient References",
+            "description": "The group's reference range per vitamin and mineral (unit: the code's suffix): `min` is the RDA or AI, `max` the upper limit where it applies to food, else null. US Dietary Reference Intakes, adults 19 to 50. Empty when reference_group is null"
           }
         },
         "type": "object",
@@ -3804,7 +3875,9 @@
           "calm_mode",
           "targets",
           "weight_tracking",
-          "weight_unit"
+          "weight_unit",
+          "reference_group",
+          "micronutrient_references"
         ],
         "title": "SettingsResponse"
       },
@@ -3882,6 +3955,22 @@
               }
             ],
             "title": "Weight Unit"
+          },
+          "reference_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "adult_women",
+                  "adult_men"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Group",
+            "description": "null turns the reference values off"
           }
         },
         "type": "object",

@@ -45,6 +45,8 @@ async def test_new_user_has_default_settings(http: httpx.AsyncClient, token: str
         "targets": NO_TARGETS,
         "weight_tracking": False,
         "weight_unit": "kg",
+        "reference_group": None,
+        "micronutrient_references": {},
     }
 
 
@@ -75,6 +77,8 @@ async def test_patch_changes_only_the_given_settings(http: httpx.AsyncClient, to
         },
         "weight_tracking": False,
         "weight_unit": "kg",
+        "reference_group": None,
+        "micronutrient_references": {},
     }
 
     response = await patch(http, token, {"calm_mode": True, "targets": {"protein_g": None}})

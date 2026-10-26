@@ -161,4 +161,5 @@ See [AGENTS.md](AGENTS.md) for architecture, conventions and rules (it applies t
 Vitamins and minerals come from [USDA FoodData Central](https://fdc.nal.usda.gov/) (FNDDS,
 Foundation Foods and SR Legacy), which is public domain (CC0 1.0). The server bundles a trimmed
 copy in `src/healthy_eating/nutrition/data/` and loads it into Postgres at startup; nothing is
-fetched at runtime.
+fetched at runtime. Optional reference ranges use the US Dietary Reference Intakes (National
+Academies) for adults 19 to 50, as published by the NIH Office of Dietary Supplements.

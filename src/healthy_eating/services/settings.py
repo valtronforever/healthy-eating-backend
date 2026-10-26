@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from healthy_eating.db.models import User
+from healthy_eating.nutrition.micronutrients import REFERENCE_GROUPS, ReferenceGroup
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, EnergyUnit, NutrientField, WeightUnit
 from healthy_eating.services.local_time import is_valid_time_zone
 from healthy_eating.services.unset import UNSET, Unset
@@ -45,6 +46,8 @@ class UserSettings:
     targets: dict[NutrientField, TargetRange | None]
     weight_tracking: bool = False
     weight_unit: WeightUnit = "kg"
+    # Vitamin and mineral reference values; None = off.
+    reference_group: ReferenceGroup | None = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,7 @@ class SettingsChanges:
     calm_mode: bool | Unset = UNSET
     weight_tracking: bool | Unset = UNSET
     weight_unit: WeightUnit | Unset = UNSET
+    reference_group: ReferenceGroup | Unset | None = UNSET
     # Only the targets listed here change; None clears a target.
     targets: Mapping[NutrientField, TargetRange | None] = field(default_factory=dict)
 
@@ -74,6 +78,9 @@ def settings_of(user: User) -> UserSettings:
         targets=targets,
         weight_tracking=user.weight_tracking,
         weight_unit="lb" if user.weight_unit == "lb" else "kg",
+        reference_group=(
+            user.reference_group if user.reference_group in REFERENCE_GROUPS else None
+        ),
     )
 
 
@@ -115,6 +122,8 @@ def _apply(user: User, changes: SettingsChanges) -> None:
         user.weight_tracking = changes.weight_tracking
     if not isinstance(changes.weight_unit, Unset):
         user.weight_unit = changes.weight_unit
+    if not isinstance(changes.reference_group, Unset):
+        user.reference_group = changes.reference_group
     for name, target in changes.targets.items():
         if target is not None:
             target.validate()
