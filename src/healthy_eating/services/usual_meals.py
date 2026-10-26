@@ -5,7 +5,8 @@ A dish is usual when its name (case and spacing ignored) was eaten at least twic
 history does not count: it may hold day totals instead of dishes.
 
 Re-logging copies the template's name, description, portion, values (optional nutrients too),
-`source`, `source_note`, `estimated_fields` and `confidence` (decision healthy-eating-ios#13):
+its food items and their vitamins and minerals, `source`, `source_note`, `estimated_fields` and
+`confidence` (decision healthy-eating-ios#13):
 only the time is new, and the new meal is saved by the client that asked for it. It works from
 any existing meal; new food is still only logged in the chat. A client-chosen id makes a repeated
 request (a double tap, a retried call) return the same meal instead of saving a second one.
@@ -18,7 +19,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from healthy_eating.db.models import Meal
+from healthy_eating.db.models import Meal, MealItem
 from healthy_eating.services.local_time import resolve_eaten_at
 from healthy_eating.services.meals import LocalMeal, get_meal, local_meal, with_client_name
 from healthy_eating.services.settings import get_time_zone
@@ -115,6 +116,20 @@ async def relog_meal(
         sodium_mg=original.sodium_mg,
         estimated_fields=list(original.estimated_fields),
         confidence=original.confidence,
+        micronutrients=(
+            dict(original.micronutrients) if original.micronutrients is not None else None
+        ),
+        items=[
+            MealItem(
+                position=item.position,
+                name=item.name,
+                grams=item.grams,
+                status=item.status,
+                food_id=item.food_id,
+                food_description=item.food_description,
+            )
+            for item in original.items
+        ],
     )
     session.add(copy)
     await session.flush()

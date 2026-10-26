@@ -26,7 +26,7 @@ nutrient the food has no value for stays unknown, it never counts as zero.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any
 
 from sqlalchemy import func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,10 +35,11 @@ from healthy_eating.db.models import ReferenceFood
 from healthy_eating.nutrition.micronutrients import (
     MICRONUTRIENTS,
     REFERENCE_DATASETS,
+    ItemMatchStatus,
     Micronutrient,
 )
 
-MatchStatus = Literal["matched", "weak", "none"]
+MatchStatus = ItemMatchStatus
 # The best candidates by text rank; common words ("chicken") match a few hundred foods.
 CANDIDATES = 1000
 WEAK_SHARE = 0.5

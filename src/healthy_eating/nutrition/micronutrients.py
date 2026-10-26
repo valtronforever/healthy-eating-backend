@@ -67,3 +67,8 @@ MICRONUTRIENT_INFO: dict[Micronutrient, MicronutrientInfo] = {
 # SR Legacy is the broad final release of the old Standard Reference.
 ReferenceDataset = Literal["fndds", "foundation", "sr_legacy"]
 REFERENCE_DATASETS: tuple[ReferenceDataset, ...] = get_args(ReferenceDataset)
+
+# How a meal's food item matched the reference data (services/food_matching.py): only
+# `matched` items have values.
+ItemMatchStatus = Literal["matched", "weak", "none"]
+ITEM_MATCH_STATUSES: tuple[ItemMatchStatus, ...] = get_args(ItemMatchStatus)

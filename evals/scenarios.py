@@ -597,6 +597,37 @@ async def same_as_yesterday(env: EvalEnvironment, checks: Checks, turns: list[Tu
     checks.note("used relog_meal", bool(env.proxy.tool_calls("relog_meal")), "")
 
 
+async def meal_items(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    turn = await env.chat(
+        CHAT.name, "Lunch: 150 g of boiled rice and a baked salmon fillet, about 120 g."
+    )
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    meals = await env.meals()
+    checks.require("one meal saved", len(meals) == 1, _describe_meals(meals))
+    if len(meals) != 1:
+        return
+    async with env.db.session() as session:
+        meal = await session.get(Meal, meals[0].id)
+        assert meal is not None
+        items = [(item.name, item.grams, item.status) for item in meal.items]
+        micronutrients = meal.micronutrients
+    checks.require("items with grams sent", len(items) >= 2, str(items))
+    checks.require(
+        "rice and salmon matched",
+        sum(1 for *_, status in items if status == "matched") >= 2,
+        str(items),
+    )
+    checks.require("vitamins and minerals stored", bool(micronutrients), str(micronutrients))
+    checks.require("user told it was saved", confirms_saved(turn.reply), turn.reply[-300:])
+    checks.note(
+        "reply does not bring up vitamins or minerals",
+        not re.search(r"vitamin|mineral|iron|calcium", turn.reply, re.IGNORECASE),
+        turn.reply[-300:],
+    )
+
+
 # Four meals over three days, as a ChatGPT calorie project would list them.
 HISTORY_VALUES = {
     (1, (350, 12, 8, 55)),
@@ -809,6 +840,11 @@ SCENARIOS = [
         "delete_duplicate",
         "A meal saved twice: the assistant deletes exactly one copy",
         delete_duplicate,
+    ),
+    Scenario(
+        "meal_items",
+        "A described meal is sent with its foods and grams, so it gets vitamins and minerals",
+        meal_items,
     ),
     Scenario(
         "import_history",

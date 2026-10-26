@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from healthy_eating.db import Database
 from healthy_eating.db.models import Meal
 from healthy_eating.mcp_server.context import current_client_id, current_user_id
+from healthy_eating.nutrition.micronutrients import ItemMatchStatus
 from healthy_eating.nutrition.types import (
     NUTRIENT_FIELDS,
     Confidence,
@@ -16,10 +17,12 @@ from healthy_eating.nutrition.types import (
     NutrientField,
     TrackedNutrientField,
 )
+from healthy_eating.services.food_matching import FoodItem, ItemMatch
 from healthy_eating.services.meals import (
     MAX_CALORIES_KCAL,
     MAX_DESCRIPTION_LENGTH,
     MAX_DISH_NAME_LENGTH,
+    MAX_ITEMS,
     MAX_MACRONUTRIENT_G,
     MAX_PORTION_GRAMS,
     MAX_SODIUM_MG,
@@ -78,6 +81,15 @@ Also:
   `eaten_at`, with the user's UTC offset if you know it. Without it the meal is saved as
   eaten right now and counts for the wrong day. Never ask the user for their offset or time
   zone. Leave `eaten_at` empty only for meals eaten just now.
+
+Vitamins and minerals:
+- Also pass `items`: each food of the meal with its weight in grams, named plainly as in a
+  food table ("white rice, cooked", "chicken breast, grilled", "olive oil"). HealthyEating
+  looks up their vitamins and minerals in USDA reference data; this never changes the
+  calories and macronutrients you pass. Leave `items` out only when you cannot tell the foods.
+- The result says which reference food each item matched. If an item matched nothing or the
+  wrong food, you may look it up with find_foods and correct the meal with `replaces_meal_id`
+  and the item's `food_id`. Do not mention vitamins and minerals unless the user asks.
 """
 
 FIELD_LABELS: dict[NutrientField, str] = {
@@ -109,6 +121,30 @@ class SavedMeal(BaseModel):
     confidence: Confidence
 
 
+class MealItemInput(BaseModel):
+    name: str = Field(
+        min_length=1,
+        max_length=MAX_DISH_NAME_LENGTH,
+        description="The food, plainly, e.g. 'white rice, cooked', 'chicken breast, grilled'",
+    )
+    grams: float = Field(gt=0, le=MAX_PORTION_GRAMS, description="Weight eaten, g")
+    food_id: int | None = Field(
+        default=None, description="A food_id from find_foods, when the name matched wrongly"
+    )
+
+
+class ItemResult(BaseModel):
+    name: str
+    grams: float
+    status: ItemMatchStatus = Field(
+        description="'matched': vitamins and minerals come from `matched_food`; 'weak' or "
+        "'none': this item has none (see find_foods)"
+    )
+    matched_food: str | None = Field(description="The USDA food used, when matched")
+    food_id: int | None = Field(description="Its food_id, when matched")
+    closest_food: str | None = Field(description="With 'weak': the closest food, not used")
+
+
 class LogMealResult(BaseModel):
     status: Literal["logged", "needs_more_info"]
     saved_to_healthy_eating: bool = Field(description="Whether the meal was saved")
@@ -128,6 +164,28 @@ class LogMealResult(BaseModel):
     )
     warnings: list[str] = Field(description="Possible problems with the values")
     meal: SavedMeal | None = Field(description="The saved meal, when status is 'logged'")
+    items: list[ItemResult] = Field(
+        default_factory=list, description="How each item matched the USDA reference data"
+    )
+
+
+def _item_results(matches: list[ItemMatch] | None) -> list[ItemResult]:
+    results = []
+    for match in matches or []:
+        matched = match.status == "matched" and match.food is not None
+        results.append(
+            ItemResult(
+                name=match.item.name,
+                grams=match.item.grams,
+                status=match.status,
+                matched_food=match.food.description if matched and match.food else None,
+                food_id=match.food.id if matched and match.food else None,
+                closest_food=(
+                    match.food.description if match.status == "weak" and match.food else None
+                ),
+            )
+        )
+    return results
 
 
 def _saved_message(meal: MealEstimate, *, refinable: bool = False) -> str:
@@ -292,6 +350,16 @@ def register(mcp: FastMCP, db: Database) -> None:
                 description="Questions for the user about values you could not estimate",
             ),
         ] = None,
+        items: Annotated[
+            list[MealItemInput] | None,
+            Field(
+                max_length=MAX_ITEMS,
+                description=(
+                    "The meal's foods with grams, for vitamins and minerals; with "
+                    "replaces_meal_id, new items replace the old ones and no items keeps them"
+                ),
+            ),
+        ] = None,
     ) -> LogMealResult:
         evaluation = evaluate_meal(
             MealEstimate(
@@ -312,6 +380,11 @@ def register(mcp: FastMCP, db: Database) -> None:
                 eaten_at=eaten_at,
                 replaces_meal_id=replaces_meal_id,
                 open_questions=open_questions or [],
+                items=(
+                    tuple(FoodItem(i.name, i.grams, i.food_id) for i in items)
+                    if items is not None
+                    else None
+                ),
             )
         )
 
@@ -336,8 +409,8 @@ def register(mcp: FastMCP, db: Database) -> None:
         meal = evaluation.meal
         try:
             async with db.session() as session:
-                row = await save_meal(session, current_user_id(), meal, current_client_id())
-                saved = _saved_meal(row)
+                result = await save_meal(session, current_user_id(), meal, current_client_id())
+                saved = _saved_meal(result.meal)
         except MealNotFoundError:
             raise ToolError(
                 "Not saved to HealthyEating: the meal to correct (replaces_meal_id) was not "
@@ -363,4 +436,5 @@ def register(mcp: FastMCP, db: Database) -> None:
             questions_for_user=questions,
             warnings=evaluation.warnings,
             meal=saved,
+            items=_item_results(result.matches),
         )

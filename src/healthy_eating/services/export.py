@@ -53,6 +53,8 @@ MEAL_COLUMNS = [
     "source",
     "source_note",
     "imported_from",
+    "micronutrients",
+    "items",
     "estimated_fields",
     "confidence",
     "client_name",
@@ -194,6 +196,17 @@ def _meal(meal: Meal, client_name: str | None, time_zone: str | None) -> dict[st
         "source": meal.source,
         "source_note": meal.source_note,
         "imported_from": meal.imported_from,
+        "micronutrients": meal.micronutrients,
+        "items": [
+            {
+                "name": item.name,
+                "grams": item.grams,
+                "status": item.status,
+                "food_id": item.food_id,
+                "food_description": item.food_description,
+            }
+            for item in meal.items
+        ],
         "estimated_fields": list(meal.estimated_fields),
         "confidence": meal.confidence,
         "client_name": client_name,
@@ -277,6 +290,10 @@ class _Chunks(io.RawIOBase):
 
 
 def _cell(value: Any) -> Any:
+    # Micronutrients and items are nested: JSON text in a CSV cell.
+    nested = isinstance(value, list) and bool(value) and isinstance(value[0], dict)
+    if isinstance(value, dict) or nested:
+        return json.dumps(value, ensure_ascii=False)
     if isinstance(value, list):
         return ";".join(value)
     if isinstance(value, bool):

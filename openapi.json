@@ -2964,6 +2964,48 @@
         ],
         "title": "MeResponse"
       },
+      "MealItemResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "grams": {
+            "type": "number",
+            "title": "Grams"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "matched",
+              "weak",
+              "none"
+            ],
+            "title": "Status",
+            "description": "'matched': its vitamins and minerals come from `food_description`"
+          },
+          "food_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Food Description",
+            "description": "The USDA food used, when matched"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "grams",
+          "status",
+          "food_description"
+        ],
+        "title": "MealItemResponse"
+      },
       "MealListResponse": {
         "properties": {
           "meals": {
@@ -3144,6 +3186,51 @@
             ],
             "title": "Source Note"
           },
+          "micronutrients": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "propertyNames": {
+                  "enum": [
+                    "vitamin_a_ug",
+                    "vitamin_c_mg",
+                    "vitamin_d_ug",
+                    "vitamin_e_mg",
+                    "vitamin_k_ug",
+                    "thiamin_mg",
+                    "riboflavin_mg",
+                    "niacin_mg",
+                    "vitamin_b6_mg",
+                    "folate_ug",
+                    "vitamin_b12_ug",
+                    "calcium_mg",
+                    "iron_mg",
+                    "magnesium_mg",
+                    "phosphorus_mg",
+                    "potassium_mg",
+                    "zinc_mg",
+                    "selenium_ug"
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Micronutrients",
+            "description": "Vitamins and minerals of the matched food items (USDA FoodData Central); the unit is the suffix (mg or ug). Null when the meal has no items; a nutrient no matched item has a value for is left out"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MealItemResponse"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "The meal's food items, in order"
+          },
           "imported_from": {
             "anyOf": [
               {
@@ -3222,6 +3309,8 @@
           "sodium_mg",
           "source",
           "source_note",
+          "micronutrients",
+          "items",
           "imported_from",
           "estimated_fields",
           "confidence",

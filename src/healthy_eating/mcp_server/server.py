@@ -5,6 +5,7 @@ from healthy_eating.db import Database
 from healthy_eating.mcp_server.timing import RequestTimingMiddleware
 from healthy_eating.mcp_server.tools import (
     days,
+    foods,
     history,
     importing,
     meals,
@@ -62,4 +63,5 @@ def create_mcp_server(provider: PostgresOAuthProvider, db: Database) -> FastMCP:
     weights.register(mcp, db)
     usual.register(mcp, db)
     importing.register(mcp, db)
+    foods.register(mcp, db)
     return mcp

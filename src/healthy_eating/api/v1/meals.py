@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from healthy_eating.api.deps import CurrentUserId, SessionDep, bearer_scheme
 from healthy_eating.api.errors import error_response
 from healthy_eating.db.base import utcnow
+from healthy_eating.nutrition.micronutrients import ItemMatchStatus, Micronutrient
 from healthy_eating.nutrition.types import (
     OPTIONAL_NUTRIENT_FIELDS,
     Confidence,
@@ -36,6 +37,15 @@ from healthy_eating.services.unset import UNSET
 from healthy_eating.services.usual_meals import MealIdTakenError, relog_meal, usual_meals
 
 router = APIRouter(tags=["meals"])
+
+
+class MealItemResponse(BaseModel):
+    name: str
+    grams: float
+    status: ItemMatchStatus = Field(
+        description="'matched': its vitamins and minerals come from `food_description`"
+    )
+    food_description: str | None = Field(description="The USDA food used, when matched")
 
 
 class MealResponse(BaseModel):
@@ -64,6 +74,14 @@ class MealResponse(BaseModel):
         )
     )
     source_note: str | None
+    micronutrients: dict[Micronutrient, float] | None = Field(
+        description=(
+            "Vitamins and minerals of the matched food items (USDA FoodData Central); the unit is "
+            "the suffix (mg or ug). Null when the meal has no items; a nutrient no matched item "
+            "has a value for is left out"
+        )
+    )
+    items: list[MealItemResponse] = Field(description="The meal's food items, in order")
     imported_from: str | None = Field(
         description=(
             "Set for meals imported from the user's earlier tracking (e.g. 'ChatGPT project'); "
@@ -146,6 +164,16 @@ def _meal_response(local: LocalMeal) -> MealResponse:
         source=meal.source,
         source_note=meal.source_note,
         imported_from=meal.imported_from,
+        micronutrients=meal.micronutrients,
+        items=[
+            MealItemResponse(
+                name=item.name,
+                grams=item.grams,
+                status=item.status,
+                food_description=item.food_description,
+            )
+            for item in meal.items
+        ],
         estimated_fields=meal.estimated_fields,
         confidence=meal.confidence,
         client_name=local.client_name,

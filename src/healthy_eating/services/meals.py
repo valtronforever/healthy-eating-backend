@@ -8,7 +8,7 @@ from sqlalchemy import Select, delete, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from healthy_eating.db.base import utcnow
-from healthy_eating.db.models import Meal, OAuthClient
+from healthy_eating.db.models import Meal, MealItem, OAuthClient
 from healthy_eating.nutrition.types import (
     NUTRIENT_FIELDS,
     TRACKED_NUTRIENT_FIELDS,
@@ -17,6 +17,7 @@ from healthy_eating.nutrition.types import (
     NutrientField,
     TrackedNutrientField,
 )
+from healthy_eating.services.food_matching import FoodItem, ItemMatch, match_items, meal_totals
 from healthy_eating.services.local_time import (
     local_date_column,
     local_eaten_at,
@@ -38,6 +39,7 @@ MAX_PORTION_GRAMS = 5000
 MAX_CALORIES_KCAL = 10000
 MAX_MACRONUTRIENT_G = 1000
 MAX_SODIUM_MG = 20000
+MAX_ITEMS = 30
 
 # Stated calories and calories derived from macros may differ by this much before we warn.
 ENERGY_TOLERANCE_RATIO = 0.2
@@ -78,6 +80,9 @@ class MealEstimate:
     eaten_at: datetime | None = None
     replaces_meal_id: uuid.UUID | None = None
     open_questions: list[str] = field(default_factory=list)
+    # The meal's foods and weights, for vitamins and minerals from reference data. None keeps
+    # the items of a corrected meal; a list replaces them.
+    items: tuple[FoodItem, ...] | None = None
 
     @property
     def missing_fields(self) -> list[NutrientField]:
@@ -192,12 +197,42 @@ class MealNotFoundError(Exception):
     """The meal to correct does not exist or belongs to another user."""
 
 
+@dataclass(frozen=True)
+class SaveResult:
+    meal: Meal
+    # How each item matched the reference data; None when no items were sent.
+    matches: list[ItemMatch] | None
+
+
+async def set_items(session: AsyncSession, meal: Meal, items: list[FoodItem]) -> list[ItemMatch]:
+    """Replace the meal's items and their vitamins and minerals (services/food_matching.py)."""
+    matches = await match_items(session, items)
+    meal.items = [
+        MealItem(
+            position=position,
+            name=match.item.name,
+            grams=match.item.grams,
+            status=match.status,
+            food_id=match.food.id if match.status == "matched" and match.food else None,
+            food_description=(
+                match.food.description if match.status == "matched" and match.food else None
+            ),
+        )
+        for position, match in enumerate(matches)
+    ]
+    meal.micronutrients = {
+        code: round(total.amount, 3) for code, total in meal_totals(matches).items()
+    }
+    return matches
+
+
 async def save_meal(
     session: AsyncSession, user_id: uuid.UUID, meal: MealEstimate, client_id: str | None = None
-) -> Meal:
+) -> SaveResult:
     """Store a complete meal. With `replaces_meal_id`, the existing meal is updated in place.
 
-    `client_id` is the AI assistant saving the meal; a correction keeps the original one.
+    `client_id` is the AI assistant saving the meal; a correction keeps the original one, and
+    keeps its items unless new ones are given.
     """
     missing = meal.missing_fields
     if missing:
@@ -227,7 +262,9 @@ async def save_meal(
         )
 
     if meal.replaces_meal_id is None:
-        row = Meal(user_id=user_id, client_id=client_id, **values)
+        # An empty, loaded list: matching items autoflushes the new meal, and replacing a
+        # collection that was never loaded would need a lazy load, which async sessions forbid.
+        row = Meal(user_id=user_id, client_id=client_id, items=[], **values)
         session.add(row)
     else:
         found = await session.scalar(
@@ -241,8 +278,11 @@ async def save_meal(
         for name, value in values.items():
             setattr(row, name, value)
 
+    matches = None
+    if meal.items is not None:
+        matches = await set_items(session, row, list(meal.items))
     await session.flush()
-    return row
+    return SaveResult(meal=row, matches=matches)
 
 
 @dataclass(frozen=True)

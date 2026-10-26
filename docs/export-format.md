@@ -66,6 +66,8 @@ their meaning.
 | `source` | `from_conversation` (numbers from the user's own workflow) or `estimated_by_assistant` |
 | `source_note` | Where existing numbers came from, e.g. "Google Sheets log" |
 | `imported_from` | For meals imported from earlier tracking: where they came from, e.g. "ChatGPT project"; empty/null otherwise |
+| `micronutrients` | Vitamins and minerals of the meal's matched food items, from USDA FoodData Central: an object of `vitamin_a_ug`, `vitamin_c_mg`, ... `selenium_ug` (the unit is the suffix); null when the meal has no items, `{}` when none matched; a nutrient no matched food has a value for is left out. In CSV: JSON text |
+| `items` | The meal's food items: `name`, `grams`, `status` (`matched`, `weak`, `none`), `food_id` and `food_description` of the USDA food used (only when matched); `[]` when there are none. In CSV: JSON text (empty when there are none) |
 | `estimated_fields` | Values the assistant estimated (JSON list; in CSV joined with `;`) |
 | `confidence` | `high`, `medium` or `low` |
 | `client_name` | The AI assistant that first saved the meal, if known |

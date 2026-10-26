@@ -19,7 +19,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from healthy_eating.db.base import Base, TimestampMixin
-from healthy_eating.nutrition.micronutrients import REFERENCE_DATASETS
+from healthy_eating.nutrition.micronutrients import ITEM_MATCH_STATUSES, REFERENCE_DATASETS
 from healthy_eating.nutrition.types import (
     CONFIDENCE_VALUES,
     DAY_STATUSES,
@@ -284,6 +284,41 @@ class Meal(TimestampMixin, Base):
     # Set for meals imported from the user's earlier tracking (services/meal_import.py), e.g.
     # "ChatGPT project" or "Google Sheets"; NULL for meals logged as they were eaten.
     imported_from: Mapped[str | None] = mapped_column(String(100))
+    # Vitamins and minerals of the matched food items (nutrition/micronutrients.py codes); NULL
+    # when the meal has no items, {} when none of its items matched the reference data.
+    micronutrients: Mapped[dict[str, float] | None] = mapped_column(JSONB)
+
+    items: Mapped[list[MealItem]] = relationship(
+        order_by="MealItem.position",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class MealItem(Base):
+    """A food of a meal with its weight, and the reference food it matched (#25).
+
+    The matched food is a snapshot (id and description): reference data is replaced when a new
+    version is bundled, so there is no foreign key to it.
+    """
+
+    __tablename__ = "meal_items"
+    __table_args__ = (
+        CheckConstraint(_one_of("status", ITEM_MATCH_STATUSES), name="status"),
+        CheckConstraint("grams > 0", name="grams_positive"),
+    )
+
+    meal_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("meals.id", ondelete="CASCADE"), primary_key=True
+    )
+    position: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    name: Mapped[str] = mapped_column(String(200))
+    grams: Mapped[float]
+    status: Mapped[str] = mapped_column(String(8))
+    # The USDA food (fdc_id) and its description, only for `matched` items.
+    food_id: Mapped[int | None]
+    food_description: Mapped[str | None] = mapped_column(Text)
 
 
 class WeightEntry(TimestampMixin, Base):
