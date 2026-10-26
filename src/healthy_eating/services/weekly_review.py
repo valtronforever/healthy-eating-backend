@@ -4,6 +4,8 @@
   only once it is marked complete. Every day left out is named with its reason, so the app can
   say which days the averages use.
 - Weekdays and weekend: the same averages, for counted Monday to Friday and Saturday/Sunday.
+- Vitamins and minerals: averaged over the counted days on which every meal has a value, as in
+  Trends (`micronutrient_averages`).
 - Per-meal patterns use every meal of the week, counted day or not (a partial day's meals are
   still real meals): protein per meal, late meals, where the values came from, low confidence.
 """
@@ -17,11 +19,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from healthy_eating.db.models import Meal
+from healthy_eating.nutrition.micronutrients import Micronutrient
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, OPTIONAL_NUTRIENT_FIELDS, NutrientField
 from healthy_eating.services.days import local_today
 from healthy_eating.services.local_time import local_date_column, local_eaten_at, utc_window
 from healthy_eating.services.settings import get_time_zone
 from healthy_eating.services.summaries import CountingRule, DaySummary, daily_summaries
+from healthy_eating.services.trends import OptionalAverage, micronutrient_averages
 
 # A meal eaten from 21:00 until 04:00 local time is a late meal.
 LATE_FROM = time(21, 0)
@@ -72,6 +76,7 @@ class WeeklyReview:
     # estimated; None without meals.
     estimated_values_share: float | None
     low_confidence_meals: int
+    micronutrient_averages: dict[Micronutrient, OptionalAverage]
 
 
 def week_of(day: date) -> tuple[date, date]:
@@ -195,4 +200,5 @@ async def weekly_review(
         ),
         estimated_values_share=(round(estimated_values / values, 3) if meals else None),
         low_confidence_meals=sum(1 for meal in meals if meal.confidence == "low"),
+        micronutrient_averages=micronutrient_averages(counted),
     )

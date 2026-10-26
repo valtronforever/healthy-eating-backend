@@ -12,7 +12,8 @@ Nothing is counted twice:
   whole, because the history and the live log would describe the same day.
 
 Imported meals do not count for usual meals (services/usual_meals.py): those come from what
-the user logs now.
+the user logs now. An entry may list its food items, which get vitamins and minerals from the
+reference data exactly as in `log_meal`.
 """
 
 import uuid
@@ -30,7 +31,7 @@ from healthy_eating.services.local_time import (
     resolve_eaten_at,
     utc_window,
 )
-from healthy_eating.services.meals import MealEstimate, evaluate_meal
+from healthy_eating.services.meals import MealEstimate, evaluate_meal, set_items
 from healthy_eating.services.settings import get_time_zone
 from healthy_eating.services.usual_meals import dish_key
 
@@ -143,8 +144,12 @@ async def import_meals(
             estimated_fields=list(meal.estimated_fields),
             confidence=meal.confidence,
             imported_from=imported_from,
+            # Loaded and empty, so set_items needs no lazy load (see save_meal).
+            items=[],
         )
         session.add(row)
+        if meal.items is not None:
+            await set_items(session, row, list(meal.items))
         imported.append(row)
         imported_days.add(day)
     await session.flush()

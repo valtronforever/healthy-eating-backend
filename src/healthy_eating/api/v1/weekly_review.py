@@ -5,8 +5,9 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
-from healthy_eating.api.v1.trends import Nutrients
+from healthy_eating.api.v1.trends import Nutrients, OptionalAverageResponse
 from healthy_eating.db.base import utcnow
+from healthy_eating.nutrition.micronutrients import Micronutrient
 from healthy_eating.services.summaries import CountingRule
 from healthy_eating.services.weekly_review import (
     LATE_FROM,
@@ -73,6 +74,12 @@ class WeeklyReviewResponse(BaseModel):
         )
     )
     low_confidence_meals: int
+    micronutrient_averages: dict[Micronutrient, OptionalAverageResponse] = Field(
+        description=(
+            "Vitamins and minerals per nutrient (the unit is the suffix, mg or ug), averaged over "
+            "the counted days on which every meal has a value, as in Trends"
+        )
+    )
 
 
 def _group(group: DayGroup) -> DayGroupResponse:
@@ -116,4 +123,8 @@ async def read_weekly_review(
         late_meals=review.late_meals,
         estimated_values_share=review.estimated_values_share,
         low_confidence_meals=review.low_confidence_meals,
+        micronutrient_averages={
+            code: OptionalAverageResponse(average=value.average, days=value.days)
+            for code, value in review.micronutrient_averages.items()
+        },
     )

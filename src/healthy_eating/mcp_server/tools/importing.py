@@ -9,7 +9,9 @@ from pydantic import BaseModel, Field
 from healthy_eating.db import Database
 from healthy_eating.db.base import utcnow
 from healthy_eating.mcp_server.context import current_client_id, current_user_id
+from healthy_eating.mcp_server.tools.meals import MealItemInput
 from healthy_eating.nutrition.types import Confidence, MealSource, TrackedNutrientField
+from healthy_eating.services.food_matching import FoodItem
 from healthy_eating.services.meal_import import (
     MAX_IMPORT_MEALS,
     MAX_IMPORTED_FROM_LENGTH,
@@ -20,6 +22,7 @@ from healthy_eating.services.meals import (
     MAX_CALORIES_KCAL,
     MAX_DESCRIPTION_LENGTH,
     MAX_DISH_NAME_LENGTH,
+    MAX_ITEMS,
     MAX_MACRONUTRIENT_G,
     MAX_PORTION_GRAMS,
     MAX_SODIUM_MG,
@@ -39,6 +42,8 @@ eaten now, use log_meal.
   protein, fat and carbohydrates (calories may be left out when the three macros are given).
 - Set `eaten_at` from the history, with the user's UTC offset if known; when only the date is
   known, use 12:00 that day.
+- When the history names the foods and amounts of a meal, also pass `items` (as in log_meal)
+  for vitamins and minerals; leave them out for day totals or when the foods are unclear.
 - At most 100 entries per call: for a longer history, call again with the next entries. Entries
   already in HealthyEating are skipped, so a repeated call never counts a meal twice, and days
   that already have meals logged in HealthyEating are left as they are.
@@ -78,6 +83,11 @@ class HistoryMeal(BaseModel):
     confidence: Confidence = "medium"
     portion_grams: float | None = Field(default=None, gt=0, le=MAX_PORTION_GRAMS)
     description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    items: list[MealItemInput] | None = Field(
+        default=None,
+        max_length=MAX_ITEMS,
+        description="The meal's foods with grams, for vitamins and minerals (as in log_meal)",
+    )
 
 
 class RejectedEntry(BaseModel):
@@ -170,6 +180,11 @@ def register(mcp: FastMCP, db: Database) -> None:
                 estimated_fields=tuple(meal.estimated_fields),
                 confidence=meal.confidence,
                 eaten_at=meal.eaten_at,
+                items=(
+                    tuple(FoodItem(i.name, i.grams, i.food_id) for i in meal.items)
+                    if meal.items is not None
+                    else None
+                ),
             )
             for meal in meals
         ]

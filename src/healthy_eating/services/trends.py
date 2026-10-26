@@ -60,6 +60,26 @@ class Trends:
     change: dict[NutrientField, float] | None
 
 
+def micronutrient_averages(counted: list[DaySummary]) -> dict[Micronutrient, OptionalAverage]:
+    """Vitamins and minerals over the counted days on which every meal has a value.
+
+    A day where only some meals have food items would pull the average down, so it is left out
+    for that nutrient; `days` says how many days each average uses. Shared with the weekly review.
+    """
+    averages = {}
+    for code in MICRONUTRIENTS:
+        amounts = [
+            day.micronutrients[code].amount
+            for day in counted
+            if code in day.micronutrients and day.micronutrients[code].meal_count == day.meal_count
+        ]
+        if amounts:
+            averages[code] = OptionalAverage(
+                average=round(sum(amounts) / len(amounts), 2), days=len(amounts)
+            )
+    return averages
+
+
 def _period(days: list[DaySummary], today: date) -> Period:
     counted = [
         day for day in days if day.counted and (day.local_date != today or day.status == "complete")
@@ -81,17 +101,6 @@ def _period(days: list[DaySummary], today: date) -> Period:
             optional_averages[name] = OptionalAverage(
                 average=round(sum(amounts) / len(amounts), 1), days=len(amounts)
             )
-    micronutrient_averages = {}
-    for code in MICRONUTRIENTS:
-        amounts = [
-            day.micronutrients[code].amount
-            for day in counted
-            if code in day.micronutrients and day.micronutrients[code].meal_count == day.meal_count
-        ]
-        if amounts:
-            micronutrient_averages[code] = OptionalAverage(
-                average=round(sum(amounts) / len(amounts), 2), days=len(amounts)
-            )
     return Period(
         first_day=days[0].local_date,
         last_day=days[-1].local_date,
@@ -100,7 +109,7 @@ def _period(days: list[DaySummary], today: date) -> Period:
         averages=averages,
         estimated_calories_share=share,
         optional_averages=optional_averages,
-        micronutrient_averages=micronutrient_averages,
+        micronutrient_averages=micronutrient_averages(counted),
     )
 
 

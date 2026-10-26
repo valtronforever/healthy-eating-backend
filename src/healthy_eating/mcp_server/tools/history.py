@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from healthy_eating.db import Database
 from healthy_eating.db.base import utcnow
 from healthy_eating.mcp_server.context import current_user_id
+from healthy_eating.nutrition.micronutrients import Micronutrient
 from healthy_eating.nutrition.types import DayStatus, MealSource, TrackedNutrientField
 from healthy_eating.services.days import user_today
 from healthy_eating.services.meals import delete_meal, get_meal, list_meals
@@ -40,7 +41,9 @@ GET_DAILY_SUMMARY_DESCRIPTION = (
     """\
 Totals per local day from HealthyEating: calories, protein, fat and carbohydrates, number of
 meals, how much of the calories the assistant estimated, and whether the day is marked
-complete. Use it when the user asks how much they have eaten today or on other days.
+complete. Use it when the user asks how much they have eaten today or on other days. It also
+gives vitamins and minerals from the meals' food items (USDA reference data); when they cover
+only some of the day's meals (meal_count), say so, and state them as plain amounts.
 """
     + READING_RULES
 )
@@ -86,6 +89,12 @@ class SavedMealItem(BaseModel):
     sodium_mg: float | None
     source: MealSource
     estimated_fields: list[TrackedNutrientField]
+    micronutrients: dict[Micronutrient, float] | None = Field(
+        description=(
+            "Vitamins and minerals of the meal's food items (USDA reference data; the unit is "
+            "the suffix, mg or ug); null when the meal has no items"
+        )
+    )
 
 
 class MealList(BaseModel):
@@ -93,6 +102,11 @@ class MealList(BaseModel):
     last_day: date
     meals: list[SavedMealItem]
     more: bool = Field(description="True if there are more meals than shown; ask for fewer days")
+
+
+class MicronutrientTotal(BaseModel):
+    amount: float
+    meal_count: int = Field(description="How many of the day's meals have a value")
 
 
 class DayTotals(BaseModel):
@@ -110,6 +124,12 @@ class DayTotals(BaseModel):
     )
     status: DayStatus | None = Field(description="'complete', 'partial' or not marked")
     counted: bool = Field(description="Whether the day counts for averages")
+    micronutrients: dict[Micronutrient, MicronutrientTotal] = Field(
+        description=(
+            "Vitamins and minerals (the unit is the suffix, mg or ug) over the meals that have "
+            "food items; meal_count says how many of the day's meals that is"
+        )
+    )
 
 
 class DailySummary(BaseModel):
@@ -159,6 +179,7 @@ def register(mcp: FastMCP, db: Database) -> None:
                     sodium_mg=item.meal.sodium_mg,
                     source=item.meal.source,
                     estimated_fields=item.meal.estimated_fields,
+                    micronutrients=item.meal.micronutrients,
                 )
                 for item in page.meals
             ],
@@ -194,6 +215,10 @@ def register(mcp: FastMCP, db: Database) -> None:
                     estimated_calories_share=day.estimated_calories_share,
                     status=day.status,
                     counted=day.counted,
+                    micronutrients={
+                        code: MicronutrientTotal(amount=total.amount, meal_count=total.meal_count)
+                        for code, total in day.micronutrients.items()
+                    },
                 )
                 for day in summaries.days
             ],

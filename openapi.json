@@ -4270,6 +4270,36 @@
           "low_confidence_meals": {
             "type": "integer",
             "title": "Low Confidence Meals"
+          },
+          "micronutrient_averages": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/OptionalAverageResponse"
+            },
+            "propertyNames": {
+              "enum": [
+                "vitamin_a_ug",
+                "vitamin_c_mg",
+                "vitamin_d_ug",
+                "vitamin_e_mg",
+                "vitamin_k_ug",
+                "thiamin_mg",
+                "riboflavin_mg",
+                "niacin_mg",
+                "vitamin_b6_mg",
+                "folate_ug",
+                "vitamin_b12_ug",
+                "calcium_mg",
+                "iron_mg",
+                "magnesium_mg",
+                "phosphorus_mg",
+                "potassium_mg",
+                "zinc_mg",
+                "selenium_ug"
+              ]
+            },
+            "type": "object",
+            "title": "Micronutrient Averages",
+            "description": "Vitamins and minerals per nutrient (the unit is the suffix, mg or ug), averaged over the counted days on which every meal has a value, as in Trends"
           }
         },
         "type": "object",
@@ -4289,7 +4319,8 @@
           "protein_buckets",
           "late_meals",
           "estimated_values_share",
-          "low_confidence_meals"
+          "low_confidence_meals",
+          "micronutrient_averages"
         ],
         "title": "WeeklyReviewResponse"
       },
