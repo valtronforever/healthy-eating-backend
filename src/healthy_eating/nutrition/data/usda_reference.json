@@ -1,0 +1,11 @@
+{
+  "source": "USDA FoodData Central, https://fdc.nal.usda.gov/",
+  "license": "CC0 1.0 (public domain); credit USDA FoodData Central as the source",
+  "datasets": {
+    "fndds": "2024-10-31",
+    "foundation": "2026-04-30",
+    "sr_legacy": "2018-04"
+  },
+  "foods": 13694,
+  "version": "d595f333f1970310"
+}

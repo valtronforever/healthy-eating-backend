@@ -21,6 +21,9 @@ from healthy_eating.config import Settings
 from healthy_eating.db import Database
 from healthy_eating.mcp_server.server import create_mcp_server
 from healthy_eating.services.cleanup import run_cleanup_periodically
+from healthy_eating.services.reference_data import bundled_usda, ensure_reference_data
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -33,6 +36,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # Open reference data for vitamins and minerals; loaded only when the bundled file changed.
+        bundled = await asyncio.to_thread(bundled_usda)
+        async with db.session() as session:
+            if await ensure_reference_data(session, bundled):
+                logger.info("Loaded USDA reference data %s", bundled.version)
         cleanup = None
         if settings.cleanup_interval_seconds:
             cleanup = asyncio.create_task(

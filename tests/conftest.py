@@ -45,7 +45,12 @@ async def _schema() -> AsyncIterator[None]:
 async def _clean_tables() -> AsyncIterator[None]:
     yield
     engine = create_async_engine(TEST_DATABASE_URL)
-    tables = ", ".join(table.name for table in Base.metadata.sorted_tables)
+    # Reference data is public and read-only: loaded once by the app's startup, kept between tests.
+    tables = ", ".join(
+        table.name
+        for table in Base.metadata.sorted_tables
+        if not table.name.startswith("reference_")
+    )
     async with engine.begin() as conn:
         await conn.execute(text(f"TRUNCATE {tables} CASCADE"))
     await engine.dispose()

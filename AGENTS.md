@@ -59,7 +59,8 @@ src/healthy_eating/
     health.py        # /health
     v1/              # REST routers for the iOS app
   services/          # business logic shared by MCP tools and REST
-  nutrition/         # shared nutrition types; later reference data, unit conversion
+  nutrition/         # shared nutrition types; micronutrients.py (vitamins and minerals, units, USDA ids);
+                     # usda_build.py builds data/usda_reference.csv.gz (+ .json) from the USDA downloads
 migrations/          # Alembic (async), dated revision files
 docker/postgres/init # creates the test database on first start
 tests/               # pytest, real Postgres; tests/oauth_helpers.py drives the OAuth flow
@@ -99,6 +100,10 @@ uv run python -m evals
 
 # After changing the REST API: regenerate the committed contract snapshot
 uv run python -m healthy_eating.api.openapi > openapi.json
+
+# Rebuild the bundled USDA reference data (CSV zips of FNDDS, SR Legacy and Foundation Foods from
+# https://fdc.nal.usda.gov/download-datasets/ in a folder outside the repo); commit both outputs
+uv run python -m healthy_eating.nutrition.usda_build <folder>
 
 # New migration after changing models (review the generated file by hand)
 uv run alembic revision --autogenerate -m "<message>"
@@ -150,6 +155,7 @@ Rules:
 - Weight (`services/weights.py`, `/api/v1/weights`) is opt-in (decision healthy-eating-ios#14): `users.weight_tracking` is off until the first weigh-in from the chat or the app, or until the user turns it on; Apple Health entries are refused (409) while it is off; turning it off keeps the entries, deleting them is separate (`DELETE /api/v1/weights` with `{"confirm": "delete-all-weights"}`). Stored in kg (`weight_unit` is display only), with `measured_at` in UTC plus offset like meals; Apple Health samples are de-duplicated by `external_id`, and a sample deleted in Apple Health is deleted here through `POST /api/v1/weights/apple-health-deletions` (only `apple_health` entries match; unknown ids are ignored). The iOS app syncs both ways: it also writes chat and app weigh-ins to Apple Health, so their ids stay ours, not `external_id`s. Trend: daily mean, then a gap-aware 10 % exponential average from the first weigh-in; weekly change over the last 28 days (at least 14). The method is in the module docstring; keep wording about weight neutral.
 - Energy expenditure (`services/expenditure.py`, `/api/v1/expenditure`): over the last 28 local days, average intake of the days counted as in Trends minus the weight trend change x 7700 kcal/kg over the days between the two trend values, rounded to 10 kcal, with `low`/`medium`/`high` confidence. No estimate (and a `reason`) below 14 counted days or weigh-ins on fewer than 6 days spanning fewer than 14. Using the user's own log keeps a steady estimation bias on both sides. The plain-language method is in the module docstring.
 - Meals stop arriving (`services/integration.py:arrival_status`, field `arrival_status` of `/api/v1/integration-status`): judged from when meals reached the server (`created_at`), not when they were eaten. `unknown` below 23 save days in the last 28 local days; `quiet` when nothing was saved yesterday, or today after the usual first-save time (80th percentile) plus 2 h; otherwise `ok`. It describes the integration, never the user's eating or logging, and its wording must stay neutral.
+- Vitamins and minerals (healthy-eating-backend#25, owner decision 2026-10-26) come from open reference data for the meal's food items, never from the assistant: USDA FoodData Central (CC0), bundled as `nutrition/data/usda_reference.csv.gz` (13,694 foods; per 100 g: energy and the 18 nutrients of `MICRONUTRIENTS` in mg or µg) and loaded at startup into `reference_foods` / `reference_data` (`services/reference_data.py`: only when the bundled version changed, in one transaction under an advisory lock). This is public reference data, not a curated food database of our own (non-goal); it is never edited by hand, only rebuilt from USDA downloads. Matching (`services/food_matching.py`): Postgres full-text search on the item name with the ranking in the module docstring; only a `matched` item (every food word found) gets values, `weak` and `none` get none; an item may name a food by `food_id`. Values scale linearly with grams; a nutrient a food has no value for stays unknown, never zero, and totals count the items that have a value. Tests keep `reference_*` tables between tests (the app loads them once).
 - Nutrient reference data must come from open sources with compatible licenses (e.g. USDA FoodData Central: public domain; Open Food Facts: ODbL, so attribute and keep it as a separate database, not mixed into our code).
 
 ## MCP tool guidelines

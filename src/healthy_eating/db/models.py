@@ -4,12 +4,22 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    CheckConstraint,
+    Computed,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy import false as sa_false
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from healthy_eating.db.base import Base, TimestampMixin
+from healthy_eating.nutrition.micronutrients import REFERENCE_DATASETS
 from healthy_eating.nutrition.types import (
     CONFIDENCE_VALUES,
     DAY_STATUSES,
@@ -339,3 +349,40 @@ class DayStatusRecord(TimestampMixin, Base):
     local_date: Mapped[date] = mapped_column(primary_key=True)
     status: Mapped[str] = mapped_column(String(8))
     set_by: Mapped[str] = mapped_column(String(9))
+
+
+class ReferenceData(Base):
+    """Which version of a bundled reference dataset is loaded (services/reference_data.py)."""
+
+    __tablename__ = "reference_data"
+
+    name: Mapped[str] = mapped_column(String(32), primary_key=True)
+    version: Mapped[str] = mapped_column(String(64))
+    # Release of each part, e.g. {"fndds": "2024-10-31", "sr_legacy": "2018-04"}.
+    datasets: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    foods: Mapped[int]
+    loaded_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class ReferenceFood(Base):
+    """A food of open reference data (USDA FoodData Central, CC0), values per 100 g.
+
+    Read-only public data, replaced as a whole when the bundled file changes; never user data.
+    """
+
+    __tablename__ = "reference_foods"
+    __table_args__ = (
+        CheckConstraint(_one_of("dataset", REFERENCE_DATASETS), name="dataset"),
+        Index("ix_reference_foods_search", "search", postgresql_using="gin"),
+    )
+
+    # The FoodData Central id (fdc_id).
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    dataset: Mapped[str] = mapped_column(String(16))
+    description: Mapped[str] = mapped_column(Text)
+    energy_kcal: Mapped[float | None]
+    # Micronutrient code (nutrition/micronutrients.py) -> amount per 100 g; missing when unknown.
+    nutrients: Mapped[dict[str, float]] = mapped_column(JSONB)
+    search: Mapped[str] = mapped_column(
+        TSVECTOR, Computed("to_tsvector('english', description)", persisted=True)
+    )
