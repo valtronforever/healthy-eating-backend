@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from healthy_eating.nutrition.micronutrients import MICRONUTRIENTS, Micronutrient
 from healthy_eating.nutrition.types import (
     NUTRIENT_FIELDS,
     OPTIONAL_NUTRIENT_FIELDS,
@@ -44,6 +45,9 @@ class Period:
     estimated_calories_share: float | None
     # Fiber, sugar and sodium; a nutrient is missing when no counted day has a value.
     optional_averages: dict[OptionalNutrientField, OptionalAverage]
+    # Vitamins and minerals (#25) over the counted days on which every meal has a value, so a
+    # day where only some meals have food items does not pull the average down.
+    micronutrient_averages: dict[Micronutrient, OptionalAverage]
 
 
 @dataclass(frozen=True)
@@ -77,6 +81,17 @@ def _period(days: list[DaySummary], today: date) -> Period:
             optional_averages[name] = OptionalAverage(
                 average=round(sum(amounts) / len(amounts), 1), days=len(amounts)
             )
+    micronutrient_averages = {}
+    for code in MICRONUTRIENTS:
+        amounts = [
+            day.micronutrients[code].amount
+            for day in counted
+            if code in day.micronutrients and day.micronutrients[code].meal_count == day.meal_count
+        ]
+        if amounts:
+            micronutrient_averages[code] = OptionalAverage(
+                average=round(sum(amounts) / len(amounts), 2), days=len(amounts)
+            )
     return Period(
         first_day=days[0].local_date,
         last_day=days[-1].local_date,
@@ -85,6 +100,7 @@ def _period(days: list[DaySummary], today: date) -> Period:
         averages=averages,
         estimated_calories_share=share,
         optional_averages=optional_averages,
+        micronutrient_averages=micronutrient_averages,
     )
 
 

@@ -5,10 +5,11 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Literal
 
-from sqlalchemy import case, func, select
+from sqlalchemy import Float, case, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from healthy_eating.db.models import Meal
+from healthy_eating.nutrition.micronutrients import MICRONUTRIENTS, Micronutrient
 from healthy_eating.nutrition.types import (
     OPTIONAL_NUTRIENT_FIELDS,
     DayStatus,
@@ -55,6 +56,8 @@ class DaySummary:
     counted: bool
     # Fiber, sugar and sodium; a nutrient is missing when no meal of the day has a value.
     optional: dict[OptionalNutrientField, NutrientTotal]
+    # Vitamins and minerals of the meals' food items (#25), the same way.
+    micronutrients: dict[Micronutrient, NutrientTotal]
 
 
 @dataclass(frozen=True)
@@ -72,9 +75,10 @@ class _Totals:
     carbohydrates_g: float
     estimated_kcal: float
     optional: dict[OptionalNutrientField, NutrientTotal]
+    micronutrients: dict[Micronutrient, NutrientTotal]
 
 
-_NO_MEALS = _Totals(0, 0.0, 0.0, 0.0, 0.0, 0.0, {})
+_NO_MEALS = _Totals(0, 0.0, 0.0, 0.0, 0.0, 0.0, {}, {})
 
 
 async def _totals_by_day(
@@ -98,6 +102,8 @@ async def _totals_by_day(
             *(func.sum(getattr(Meal, name)) for name in OPTIONAL_NUTRIENT_FIELDS),
             # COUNT of a column skips NULL: the meals that have a value.
             *(func.count(getattr(Meal, name)) for name in OPTIONAL_NUTRIENT_FIELDS),
+            *(func.sum(cast(Meal.micronutrients[code].astext, Float)) for code in MICRONUTRIENTS),
+            *(func.count(Meal.micronutrients[code].astext) for code in MICRONUTRIENTS),
         )
         .where(
             Meal.user_id == user_id,
@@ -110,14 +116,23 @@ async def _totals_by_day(
     )
     totals = {}
     width = len(OPTIONAL_NUTRIENT_FIELDS)
+    micro = len(MICRONUTRIENTS)
     for day, count, kcal, protein, fat, carbs, estimated, *more in rows:
-        amounts, counts = more[:width], more[width:]
+        amounts, counts = more[:width], more[width : 2 * width]
+        micro_amounts = more[2 * width : 2 * width + micro]
+        micro_counts = more[2 * width + micro :]
         optional = {
             name: NutrientTotal(amount=round(amount, 1), meal_count=meals)
             for name, amount, meals in zip(OPTIONAL_NUTRIENT_FIELDS, amounts, counts, strict=True)
             if meals
         }
-        totals[day] = _Totals(count, kcal, protein, fat, carbs, estimated, optional)
+        # Two decimals: B vitamins are fractions of a mg.
+        micronutrients = {
+            code: NutrientTotal(amount=round(amount, 2), meal_count=meals)
+            for code, amount, meals in zip(MICRONUTRIENTS, micro_amounts, micro_counts, strict=True)
+            if meals
+        }
+        totals[day] = _Totals(count, kcal, protein, fat, carbs, estimated, optional, micronutrients)
     return totals
 
 
@@ -159,6 +174,7 @@ async def daily_summaries(
                     complete_days_only=complete_days_only,
                 ),
                 optional=total.optional,
+                micronutrients=total.micronutrients,
             )
         )
     return DailySummaries(

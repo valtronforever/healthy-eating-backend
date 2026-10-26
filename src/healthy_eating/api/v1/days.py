@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from healthy_eating.api.deps import CurrentUserId, SessionDep
 from healthy_eating.api.errors import error_response
 from healthy_eating.db.base import utcnow
+from healthy_eating.nutrition.micronutrients import Micronutrient
 from healthy_eating.nutrition.types import DayStatus, StatusSetter
 from healthy_eating.services.days import (
     DayStatusInfo,
@@ -69,6 +70,12 @@ class DaySummaryResponse(BaseModel):
     )
     sugar_g: NutrientTotalResponse | None
     sodium_mg: NutrientTotalResponse | None = Field(description="In mg")
+    micronutrients: dict[Micronutrient, NutrientTotalResponse] = Field(
+        description=(
+            "Vitamins and minerals of the meals' food items (USDA reference data), per nutrient "
+            "(the unit is the suffix, mg or ug); a nutrient no meal of the day has is left out"
+        )
+    )
     estimated_calories_share: float | None = Field(
         description=(
             "Share of the day's calories the assistant estimated (0 to 1); null without calories"
@@ -101,6 +108,10 @@ def _day_response(day: DaySummary) -> DaySummaryResponse:
         fiber_g=nutrient_total(day.optional.get("fiber_g")),
         sugar_g=nutrient_total(day.optional.get("sugar_g")),
         sodium_mg=nutrient_total(day.optional.get("sodium_mg")),
+        micronutrients={
+            code: NutrientTotalResponse(amount=total.amount, meal_count=total.meal_count)
+            for code, total in day.micronutrients.items()
+        },
         estimated_calories_share=day.estimated_calories_share,
         status=day.status,
         status_set_by=day.status_set_by,

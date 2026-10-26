@@ -48,6 +48,7 @@ async def test_totals_per_local_day_including_days_without_meals(
         "fiber_g": None,
         "sugar_g": None,
         "sodium_mg": None,
+        "micronutrients": {},
         "estimated_calories_share": None,
         "status": None,
         "status_set_by": None,

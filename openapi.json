@@ -2328,6 +2328,36 @@
             ],
             "description": "In mg"
           },
+          "micronutrients": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NutrientTotalResponse"
+            },
+            "propertyNames": {
+              "enum": [
+                "vitamin_a_ug",
+                "vitamin_c_mg",
+                "vitamin_d_ug",
+                "vitamin_e_mg",
+                "vitamin_k_ug",
+                "thiamin_mg",
+                "riboflavin_mg",
+                "niacin_mg",
+                "vitamin_b6_mg",
+                "folate_ug",
+                "vitamin_b12_ug",
+                "calcium_mg",
+                "iron_mg",
+                "magnesium_mg",
+                "phosphorus_mg",
+                "potassium_mg",
+                "zinc_mg",
+                "selenium_ug"
+              ]
+            },
+            "type": "object",
+            "title": "Micronutrients",
+            "description": "Vitamins and minerals of the meals' food items (USDA reference data), per nutrient (the unit is the suffix, mg or ug); a nutrient no meal of the day has is left out"
+          },
           "estimated_calories_share": {
             "anyOf": [
               {
@@ -2388,6 +2418,7 @@
           "fiber_g",
           "sugar_g",
           "sodium_mg",
+          "micronutrients",
           "estimated_calories_share",
           "status",
           "status_set_by",
@@ -3623,6 +3654,36 @@
               }
             ],
             "description": "In mg"
+          },
+          "micronutrient_averages": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/OptionalAverageResponse"
+            },
+            "propertyNames": {
+              "enum": [
+                "vitamin_a_ug",
+                "vitamin_c_mg",
+                "vitamin_d_ug",
+                "vitamin_e_mg",
+                "vitamin_k_ug",
+                "thiamin_mg",
+                "riboflavin_mg",
+                "niacin_mg",
+                "vitamin_b6_mg",
+                "folate_ug",
+                "vitamin_b12_ug",
+                "calcium_mg",
+                "iron_mg",
+                "magnesium_mg",
+                "phosphorus_mg",
+                "potassium_mg",
+                "zinc_mg",
+                "selenium_ug"
+              ]
+            },
+            "type": "object",
+            "title": "Micronutrient Averages",
+            "description": "Vitamins and minerals per nutrient (the unit is the suffix, mg or ug), averaged over the counted days on which every meal has a value; `days` says how many"
           }
         },
         "type": "object",
@@ -3635,7 +3696,8 @@
           "estimated_calories_share",
           "fiber_g",
           "sugar_g",
-          "sodium_mg"
+          "sodium_mg",
+          "micronutrient_averages"
         ],
         "title": "PeriodResponse"
       },

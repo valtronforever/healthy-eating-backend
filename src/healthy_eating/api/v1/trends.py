@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
 from healthy_eating.db.base import utcnow
+from healthy_eating.nutrition.micronutrients import Micronutrient
 from healthy_eating.services.summaries import CountingRule
 from healthy_eating.services.trends import WINDOWS, OptionalAverage, Period, trends
 
@@ -44,6 +45,12 @@ class PeriodResponse(BaseModel):
     )
     sugar_g: OptionalAverageResponse | None
     sodium_mg: OptionalAverageResponse | None = Field(description="In mg")
+    micronutrient_averages: dict[Micronutrient, OptionalAverageResponse] = Field(
+        description=(
+            "Vitamins and minerals per nutrient (the unit is the suffix, mg or ug), averaged over "
+            "the counted days on which every meal has a value; `days` says how many"
+        )
+    )
 
 
 class TrendsResponse(BaseModel):
@@ -69,6 +76,10 @@ def _period(period: Period) -> PeriodResponse:
         fiber_g=_optional(period.optional_averages.get("fiber_g")),
         sugar_g=_optional(period.optional_averages.get("sugar_g")),
         sodium_mg=_optional(period.optional_averages.get("sodium_mg")),
+        micronutrient_averages={
+            code: OptionalAverageResponse(average=value.average, days=value.days)
+            for code, value in period.micronutrient_averages.items()
+        },
     )
 
 
