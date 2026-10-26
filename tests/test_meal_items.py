@@ -277,3 +277,18 @@ async def test_relogging_supplements_copies_their_label_values(
         {"name": "Zinc 15 mg tablet", "grams": None, "values": {"zinc_mg": 15}}
     ]
     assert copy["micronutrients"] == {"zinc_mg": 15}
+
+
+async def test_untracked_label_nutrients_are_left_out_not_refused(
+    app: FastAPI, http: httpx.AsyncClient
+) -> None:
+    owner = await account(http, "kim.label@example.com")
+    values = {"vitamin_b12_ug": 1000, "biotin_ug": 600, "omega_3_mg": 600}
+    items = [{"name": "B complex capsule", "label_values": values}]
+
+    result = await call(app, owner, "log_meal", {**SUPPLEMENTS, "items": items})
+
+    [item] = result["items"]
+    assert (item["status"], item["untracked_values"]) == ("label", ["biotin_ug", "omega_3_mg"])
+    meal = await rest_meal(http, owner, result["meal"]["meal_id"])
+    assert meal["micronutrients"] == {"vitamin_b12_ug": 1000}

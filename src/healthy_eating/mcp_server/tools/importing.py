@@ -9,9 +9,8 @@ from pydantic import BaseModel, Field
 from healthy_eating.db import Database
 from healthy_eating.db.base import utcnow
 from healthy_eating.mcp_server.context import current_client_id, current_user_id
-from healthy_eating.mcp_server.tools.meals import MealItemInput
+from healthy_eating.mcp_server.tools.meals import MealItemInput, food_item
 from healthy_eating.nutrition.types import Confidence, MealSource, TrackedNutrientField
-from healthy_eating.services.food_matching import FoodItem
 from healthy_eating.services.meal_import import (
     MAX_IMPORT_MEALS,
     MAX_IMPORTED_FROM_LENGTH,
@@ -181,11 +180,7 @@ def register(mcp: FastMCP, db: Database) -> None:
                 estimated_fields=tuple(meal.estimated_fields),
                 confidence=meal.confidence,
                 eaten_at=meal.eaten_at,
-                items=(
-                    tuple(FoodItem(i.name, i.grams, i.food_id, i.label_values) for i in meal.items)
-                    if meal.items is not None
-                    else None
-                ),
+                items=(tuple(food_item(i) for i in meal.items) if meal.items is not None else None),
             )
             for meal in meals
         ]

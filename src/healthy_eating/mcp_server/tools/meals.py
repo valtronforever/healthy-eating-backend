@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from healthy_eating.db import Database
 from healthy_eating.db.models import Meal
 from healthy_eating.mcp_server.context import current_client_id, current_user_id
-from healthy_eating.nutrition.micronutrients import ItemMatchStatus, Micronutrient
+from healthy_eating.nutrition.micronutrients import MICRONUTRIENTS, ItemMatchStatus, Micronutrient
 from healthy_eating.nutrition.types import (
     NUTRIENT_FIELDS,
     Confidence,
@@ -145,16 +145,32 @@ class MealItemInput(BaseModel):
     food_id: int | None = Field(
         default=None, description="A food_id from find_foods, when the name matched wrongly"
     )
-    label_values: dict[Micronutrient, Annotated[float, Field(ge=0, le=MAX_LABEL_VALUE)]] | None = (
-        Field(
-            default=None,
-            description=(
-                "Only for supplements or packaged foods: vitamins and minerals printed on the "
-                "label or stated by the user, for the amount taken, in the unit of each key "
-                "(mg or ug)"
-            ),
-        )
+    # Any keys: nutrients HealthyEating does not track (biotin, omega-3...) are left out and
+    # reported back, so one of them never costs the user the whole meal.
+    label_values: dict[str, Annotated[float, Field(ge=0, le=MAX_LABEL_VALUE)]] | None = Field(
+        default=None,
+        description=(
+            "Only for supplements or packaged foods: vitamins and minerals printed on the label "
+            "or stated by the user, for the amount taken, keyed by "
+            + ", ".join(MICRONUTRIENTS)
+            + " (the unit is the key's suffix, mg or ug). Other nutrients are not tracked and "
+            "are left out"
+        ),
     )
+
+
+def food_item(item: MealItemInput) -> FoodItem:
+    """The item to save; label values HealthyEating does not track are left out."""
+    values: dict[Micronutrient, float] | None = None
+    if item.label_values is not None:
+        values = {
+            code: item.label_values[code] for code in MICRONUTRIENTS if code in item.label_values
+        }
+    return FoodItem(item.name, item.grams, item.food_id, values)
+
+
+def untracked_values(item: MealItemInput) -> list[str]:
+    return sorted(key for key in item.label_values or {} if key not in MICRONUTRIENTS)
 
 
 class ItemResult(BaseModel):
@@ -167,6 +183,10 @@ class ItemResult(BaseModel):
     matched_food: str | None = Field(description="The USDA food used, when matched")
     food_id: int | None = Field(description="Its food_id, when matched")
     closest_food: str | None = Field(description="With 'weak': the closest food, not used")
+    untracked_values: list[str] = Field(
+        default_factory=list,
+        description="label_values keys HealthyEating does not track; they were left out",
+    )
 
 
 class LogMealResult(BaseModel):
@@ -193,9 +213,9 @@ class LogMealResult(BaseModel):
     )
 
 
-def _item_results(matches: list[ItemMatch] | None) -> list[ItemResult]:
+def _item_results(matches: list[ItemMatch] | None, untracked: list[list[str]]) -> list[ItemResult]:
     results = []
-    for match in matches or []:
+    for index, match in enumerate(matches or []):
         matched = match.status == "matched" and match.food is not None
         results.append(
             ItemResult(
@@ -207,6 +227,7 @@ def _item_results(matches: list[ItemMatch] | None) -> list[ItemResult]:
                 closest_food=(
                     match.food.description if match.status == "weak" and match.food else None
                 ),
+                untracked_values=untracked[index] if index < len(untracked) else [],
             )
         )
     return results
@@ -404,11 +425,7 @@ def register(mcp: FastMCP, db: Database) -> None:
                 eaten_at=eaten_at,
                 replaces_meal_id=replaces_meal_id,
                 open_questions=open_questions or [],
-                items=(
-                    tuple(FoodItem(i.name, i.grams, i.food_id, i.label_values) for i in items)
-                    if items is not None
-                    else None
-                ),
+                items=(tuple(food_item(i) for i in items) if items is not None else None),
             )
         )
 
@@ -460,5 +477,5 @@ def register(mcp: FastMCP, db: Database) -> None:
             questions_for_user=questions,
             warnings=evaluation.warnings,
             meal=saved,
-            items=_item_results(result.matches),
+            items=_item_results(result.matches, [untracked_values(i) for i in items or []]),
         )
