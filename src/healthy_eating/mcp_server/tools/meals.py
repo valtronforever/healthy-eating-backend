@@ -7,8 +7,10 @@ from fastmcp.exceptions import ToolError
 from pydantic import BaseModel, Field
 
 from healthy_eating.db import Database
+from healthy_eating.db.base import utcnow
 from healthy_eating.db.models import Meal
 from healthy_eating.mcp_server.context import current_client_id, current_user_id
+from healthy_eating.mcp_server.tools.usual import Per100g, per_100g
 from healthy_eating.nutrition.micronutrients import MICRONUTRIENTS, ItemMatchStatus, Micronutrient
 from healthy_eating.nutrition.types import (
     NUTRIENT_FIELDS,
@@ -18,6 +20,7 @@ from healthy_eating.nutrition.types import (
     TrackedNutrientField,
 )
 from healthy_eating.services.food_matching import FoodItem, ItemMatch
+from healthy_eating.services.meal_search import KnownMeal, earlier_known_meal
 from healthy_eating.services.meals import (
     MAX_CALORIES_KCAL,
     MAX_DESCRIPTION_LENGTH,
@@ -47,8 +50,10 @@ HealthyEating needs all four values for every meal:
   spreadsheet, a nutrition label or another app): pass them unchanged with
   source="from_conversation" and never alter them. Estimate the values that calculation
   did not produce and list them in `estimated_fields`.
-- Nothing calculated yet (only a photo or a description): estimate all values yourself
-  with source="estimated_by_assistant".
+- Nothing calculated yet (only a photo or a description): for a packaged or branded product,
+  or a dish the user may have logged before, first look for its known values with find_meals
+  (the same food at another weight: relog_meal with portion_grams). Otherwise estimate all
+  values yourself with source="estimated_by_assistant".
 - Something is unclear (portion size, drinks, sauces, oil or butter): if you can still give
   a rough estimate, pass all four values with confidence "low" and put your questions in
   `open_questions`. The meal is saved now; when the user answers, call again with
@@ -66,7 +71,8 @@ Handling the result:
   one-line `user_message`, then the questions in `questions_for_user` (if any). Never ask
   instead of answering.
 - status "logged": the meal was saved. If `questions_for_user` is not empty, ask them after
-  your answer.
+  your answer. `earlier_meal` is set when an earlier meal with this name had known values that
+  differ from your estimate; its question is one of them.
 - status "needs_more_info": nothing was saved. Ask the returned questions, then call again.
   If the user cannot answer, use your best estimate with confidence "low".
 - If the call fails with an error, tell the user the meal was NOT saved to HealthyEating,
@@ -210,6 +216,43 @@ class LogMealResult(BaseModel):
     meal: SavedMeal | None = Field(description="The saved meal, when status is 'logged'")
     items: list[ItemResult] = Field(
         default_factory=list, description="How each item matched the USDA reference data"
+    )
+    earlier_meal: "EarlierMeal | None" = Field(
+        default=None,
+        description=(
+            "An earlier meal with this name whose values were known (label, the user's numbers) "
+            "and differ from this estimate; its question is in questions_for_user"
+        ),
+    )
+
+
+class EarlierMeal(BaseModel):
+    meal_id: uuid.UUID = Field(description="The earlier meal; relog_meal can log it again")
+    dish_name: str
+    eaten_at: datetime = Field(description="Local time with the UTC offset")
+    per_100g: Per100g
+    source_note: str | None
+
+
+LogMealResult.model_rebuild()
+
+
+def _earlier_meal(known: KnownMeal) -> EarlierMeal:
+    return EarlierMeal(
+        meal_id=known.template.meal.id,
+        dish_name=known.template.meal.dish_name,
+        eaten_at=known.template.eaten_at,
+        per_100g=per_100g(known.per_100g),
+        source_note=known.template.meal.source_note,
+    )
+
+
+def _earlier_question(known: KnownMeal) -> str:
+    when = known.template.eaten_at.date().isoformat()
+    calories = known.per_100g["calories_kcal"]
+    return (
+        f"On {when} you logged {known.template.meal.dish_name} with known values "
+        f"({calories:g} kcal per 100 g). Use those for this meal too?"
     )
 
 
@@ -452,17 +495,30 @@ def register(mcp: FastMCP, db: Database) -> None:
             async with db.session() as session:
                 result = await save_meal(session, current_user_id(), meal, current_client_id())
                 saved = _saved_meal(result.meal)
+                # Only for a new meal: a correction already settled its values.
+                earlier = (
+                    await earlier_known_meal(session, current_user_id(), result.meal, now=utcnow())
+                    if replaces_meal_id is None
+                    else None
+                )
         except MealNotFoundError:
             raise ToolError(
                 "Not saved to HealthyEating: the meal to correct (replaces_meal_id) was not "
                 "found. Save it as a new meal instead."
             ) from None
 
-        questions = evaluation.questions_for_user
+        questions = list(evaluation.questions_for_user)
         message = (
             "The meal was saved. Keep your normal answer, add `user_message` as one line "
             "and mention any warnings."
         )
+        if earlier is not None:
+            questions.append(_earlier_question(earlier))
+            message += (
+                " `earlier_meal` has known values for this food. If the user agrees to use "
+                "them, call log_meal with replaces_meal_id and the values per 100 g scaled to "
+                "this portion (source 'from_conversation', not estimated)."
+            )
         if questions:
             message += (
                 " Then ask `questions_for_user`; if the answer changes the values, call "
@@ -478,4 +534,5 @@ def register(mcp: FastMCP, db: Database) -> None:
             warnings=evaluation.warnings,
             meal=saved,
             items=_item_results(result.matches, [untracked_values(i) for i in items or []]),
+            earlier_meal=_earlier_meal(earlier) if earlier is not None else None,
         )

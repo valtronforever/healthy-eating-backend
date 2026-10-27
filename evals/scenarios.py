@@ -597,6 +597,43 @@ async def same_as_yesterday(env: EvalEnvironment, checks: Checks, turns: list[Tu
     checks.note("used relog_meal", bool(env.proxy.tool_calls("relog_meal")), "")
 
 
+async def known_product(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    # Logged two days ago from its label: 150 g with 105 kcal, 4.5 g protein, 3.75 g fat, 13.5 g
+    # carbohydrates, so 200 g has 140 kcal, 6 g protein, 5 g fat and 18 g carbohydrates.
+    await env.add_meal(
+        "Йогурт Danone 2,5%",
+        (105, 4.5, 3.75, 13.5),
+        minutes_ago=2 * 24 * 60,
+        portion_grams=150,
+        source_note="nutrition label",
+    )
+    turn = await env.chat(CHAT.name, "Just had a Danone yogurt, 200 g.")
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    meals = await env.meals()
+    checks.require("exactly one new meal", len(meals) == 2, _describe_meals(meals))
+    newest = max(meals, key=lambda meal: meal.created_at) if meals else None
+    checks.require(
+        "the label values scaled to 200 g",
+        newest is not None
+        and abs(newest.calories_kcal - 140) <= 7
+        and abs(newest.protein_g - 6) <= 0.5
+        and abs(newest.fat_g - 5) <= 0.5
+        and abs(newest.carbohydrates_g - 18) <= 1,
+        _describe_meals(meals),
+    )
+    checks.require(
+        "not marked as estimated",
+        newest is not None and not newest.estimated_fields,
+        _describe_meals(meals),
+    )
+    checks.require("user told it was saved", confirms_saved(turn.reply), turn.reply[-300:])
+    assert env.proxy is not None
+    checks.note("used find_meals", bool(env.proxy.tool_calls("find_meals")), "")
+    checks.note("used relog_meal", bool(env.proxy.tool_calls("relog_meal")), "")
+
+
 async def meal_items(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
     turn = await env.chat(
         CHAT.name, "Lunch: 150 g of boiled rice and a baked salmon fillet, about 120 g."
@@ -863,6 +900,11 @@ SCENARIOS = [
         "same_as_yesterday",
         "Same breakfast as yesterday: one new meal with the same values",
         same_as_yesterday,
+    ),
+    Scenario(
+        "known_product",
+        "A product logged before from its label, now another weight: the label values scaled",
+        known_product,
     ),
     Scenario(
         "delete_duplicate",

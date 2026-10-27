@@ -279,6 +279,8 @@ class EvalEnvironment:
         values: tuple[float, float, float, float],
         *,
         minutes_ago: int = 30,
+        portion_grams: float | None = None,
+        source_note: str | None = None,
     ) -> Meal:
         """Save a meal for the eval user directly, as if an earlier conversation had logged it."""
         calories, protein, fat, carbs = values
@@ -294,6 +296,8 @@ class EvalEnvironment:
                 carbohydrates_g=carbs,
                 estimated_fields=[],
                 confidence="high",
+                portion_grams=portion_grams,
+                source_note=source_note,
             )
             session.add(meal)
         return meal

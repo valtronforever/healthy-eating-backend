@@ -32,6 +32,9 @@ tell the user in one short line whether the change reached HealthyEating, naming
 When the user says they ate exactly the same as before ("same breakfast as yesterday", "my
 usual oatmeal"), log it again with `relog_meal` (find it with `list_usual_meals` or
 `list_meals`); when anything differs, use `log_meal`.
+Before you estimate a packaged or branded product, or a dish the user may have logged before,
+look for it with `find_meals`: values the user had from a label or their own numbers win over
+a new estimate. The same food at another weight goes through `relog_meal` with `portion_grams`.
 When the user asks to import, move or copy their earlier food history (a ChatGPT project, a
 spreadsheet, another app) into HealthyEating, send it with `import_meals`, in parts of up to
 100 entries.

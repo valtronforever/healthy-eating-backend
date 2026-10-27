@@ -10,6 +10,12 @@ its food items and their vitamins and minerals, `source`, `source_note`, `estima
 only the time is new, and the new meal is saved by the client that asked for it. It works from
 any existing meal; new food is still only logged in the chat. A client-chosen id makes a repeated
 request (a double tap, a retried call) return the same meal instead of saving a second one.
+
+The same food at another weight (owner decision 2026-10-27, services/meal_search.py): with a new
+`portion_grams`, every value scales by the ratio of the weights (calories, macronutrients, fiber,
+sugar, sodium, the items' grams, label values and vitamins and minerals), and the provenance stays
+as it was. That needs the template's portion weight. Label items without grams (a capsule) keep
+their values: they are counted, not weighed.
 """
 
 import uuid
@@ -74,6 +80,23 @@ class MealIdTakenError(Exception):
     """The id chosen for the new meal belongs to another user's meal."""
 
 
+class PortionUnknownError(Exception):
+    """A new portion weight was asked for, but the meal to log again has none to scale from."""
+
+
+def _scale(value: float, factor: float, digits: int = 1) -> float:
+    # The same weight copies the value exactly.
+    return value if factor == 1.0 else round(value * factor, digits)
+
+
+def _scaled(value: float | None, factor: float) -> float | None:
+    return None if value is None else _scale(value, factor)
+
+
+def _scaled_values(values: dict[str, float], factor: float) -> dict[str, float]:
+    return {code: _scale(value, factor, 3) for code, value in values.items()}
+
+
 async def relog_meal(
     session: AsyncSession,
     user_id: uuid.UUID,
@@ -83,8 +106,12 @@ async def relog_meal(
     eaten_at: datetime | None,
     client_id: str | None,
     now: datetime,
+    portion_grams: float | None = None,
 ) -> LocalMeal | None:
-    """Log one of the user's meals again; None if `meal_id` is not one of their meals."""
+    """Log one of the user's meals again; None if `meal_id` is not one of their meals.
+
+    With `portion_grams`, the values scale to that weight (see the module docstring).
+    """
     if new_meal_id is not None:
         existing = await session.get(Meal, new_meal_id)
         if existing is not None:
@@ -94,6 +121,11 @@ async def relog_meal(
     original = await session.scalar(select(Meal).where(Meal.id == meal_id, Meal.user_id == user_id))
     if original is None:
         return None
+    factor = 1.0
+    if portion_grams is not None and portion_grams != original.portion_grams:
+        if original.portion_grams is None:
+            raise PortionUnknownError
+        factor = portion_grams / original.portion_grams
     time_zone = await get_time_zone(session, user_id)
     when, offset = resolve_eaten_at(eaten_at, time_zone, now=now)
     copy = Meal(
@@ -106,28 +138,36 @@ async def relog_meal(
         source_note=original.source_note,
         eaten_at=when,
         utc_offset_minutes=offset,
-        portion_grams=original.portion_grams,
-        calories_kcal=original.calories_kcal,
-        protein_g=original.protein_g,
-        fat_g=original.fat_g,
-        carbohydrates_g=original.carbohydrates_g,
-        fiber_g=original.fiber_g,
-        sugar_g=original.sugar_g,
-        sodium_mg=original.sodium_mg,
+        portion_grams=portion_grams if factor != 1.0 else original.portion_grams,
+        calories_kcal=_scale(original.calories_kcal, factor),
+        protein_g=_scale(original.protein_g, factor),
+        fat_g=_scale(original.fat_g, factor),
+        carbohydrates_g=_scale(original.carbohydrates_g, factor),
+        fiber_g=_scaled(original.fiber_g, factor),
+        sugar_g=_scaled(original.sugar_g, factor),
+        sodium_mg=_scaled(original.sodium_mg, factor),
         estimated_fields=list(original.estimated_fields),
         confidence=original.confidence,
         micronutrients=(
-            dict(original.micronutrients) if original.micronutrients is not None else None
+            _scaled_values(original.micronutrients, factor)
+            if original.micronutrients is not None
+            else None
         ),
         items=[
             MealItem(
                 position=item.position,
                 name=item.name,
-                grams=item.grams,
+                grams=_scaled(item.grams, factor),
                 status=item.status,
                 food_id=item.food_id,
                 food_description=item.food_description,
-                label_values=dict(item.label_values) if item.label_values is not None else None,
+                label_values=(
+                    None
+                    if item.label_values is None
+                    else dict(item.label_values)
+                    if item.grams is None
+                    else _scaled_values(item.label_values, factor)
+                ),
             )
             for item in original.items
         ],
