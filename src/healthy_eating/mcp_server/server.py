@@ -8,6 +8,7 @@ from healthy_eating.mcp_server.tools import (
     foods,
     history,
     importing,
+    insights,
     meals,
     profile,
     usual,
@@ -65,6 +66,7 @@ def create_mcp_server(provider: PostgresOAuthProvider, db: Database) -> FastMCP:
     meals.register(mcp, db)
     days.register(mcp, db)
     history.register(mcp, db)
+    insights.register(mcp, db)
     weights.register(mcp, db)
     usual.register(mcp, db)
     importing.register(mcp, db)

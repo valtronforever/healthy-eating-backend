@@ -1243,6 +1243,140 @@
         }
       }
     },
+    "/api/v1/micronutrients/insights": {
+      "get": {
+        "tags": [
+          "days"
+        ],
+        "summary": "Read Micronutrient Insights",
+        "description": "Vitamins and minerals over the period and the one before: weekly averages, days below,\nwithin or above the range, top sources and how many meals have values.",
+        "operationId": "getMicronutrientInsights",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "First local day (YYYY-MM-DD)",
+              "title": "From"
+            },
+            "description": "First local day (YYYY-MM-DD)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Last local day (YYYY-MM-DD), inclusive; at most 366 days",
+              "title": "To"
+            },
+            "description": "Last local day (YYYY-MM-DD), inclusive; at most 366 days"
+          },
+          {
+            "name": "nutrient",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "vitamin_a_ug",
+                      "vitamin_c_mg",
+                      "vitamin_d_ug",
+                      "vitamin_e_mg",
+                      "vitamin_k_ug",
+                      "thiamin_mg",
+                      "riboflavin_mg",
+                      "niacin_mg",
+                      "vitamin_b6_mg",
+                      "folate_ug",
+                      "vitamin_b12_ug",
+                      "calcium_mg",
+                      "iron_mg",
+                      "magnesium_mg",
+                      "phosphorus_mg",
+                      "potassium_mg",
+                      "zinc_mg",
+                      "selenium_ug"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only these nutrients; all by default",
+              "title": "Nutrient"
+            },
+            "description": "Only these nutrients; all by default"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicronutrientInsightsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/weekly-review": {
       "get": {
         "tags": [
@@ -2929,6 +3063,74 @@
         ],
         "title": "ImportResponse"
       },
+      "InsightsPeriodResponse": {
+        "properties": {
+          "first_day": {
+            "type": "string",
+            "format": "date",
+            "title": "First Day"
+          },
+          "last_day": {
+            "type": "string",
+            "format": "date",
+            "title": "Last Day"
+          },
+          "counted_days": {
+            "type": "integer",
+            "title": "Counted Days"
+          },
+          "meal_count": {
+            "type": "integer",
+            "title": "Meal Count",
+            "description": "Meals in the period"
+          },
+          "meals_with_values": {
+            "type": "integer",
+            "title": "Meals With Values",
+            "description": "Meals with vitamin and mineral values"
+          },
+          "nutrients": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NutrientInsightResponse"
+            },
+            "propertyNames": {
+              "enum": [
+                "vitamin_a_ug",
+                "vitamin_c_mg",
+                "vitamin_d_ug",
+                "vitamin_e_mg",
+                "vitamin_k_ug",
+                "thiamin_mg",
+                "riboflavin_mg",
+                "niacin_mg",
+                "vitamin_b6_mg",
+                "folate_ug",
+                "vitamin_b12_ug",
+                "calcium_mg",
+                "iron_mg",
+                "magnesium_mg",
+                "phosphorus_mg",
+                "potassium_mg",
+                "zinc_mg",
+                "selenium_ug"
+              ]
+            },
+            "type": "object",
+            "title": "Nutrients",
+            "description": "Nutrients without any value in the period are left out"
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_day",
+          "last_day",
+          "counted_days",
+          "meal_count",
+          "meals_with_values",
+          "nutrients"
+        ],
+        "title": "InsightsPeriodResponse"
+      },
       "IntegrationStatusResponse": {
         "properties": {
           "last_meal_saved_at": {
@@ -3791,6 +3993,63 @@
         ],
         "title": "MealUpdateResponse"
       },
+      "MicronutrientInsightsResponse": {
+        "properties": {
+          "counting_rule": {
+            "type": "string",
+            "enum": [
+              "complete_days",
+              "logged_days"
+            ],
+            "title": "Counting Rule"
+          },
+          "ranges": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MicronutrientRangeModel"
+            },
+            "propertyNames": {
+              "enum": [
+                "vitamin_a_ug",
+                "vitamin_c_mg",
+                "vitamin_d_ug",
+                "vitamin_e_mg",
+                "vitamin_k_ug",
+                "thiamin_mg",
+                "riboflavin_mg",
+                "niacin_mg",
+                "vitamin_b6_mg",
+                "folate_ug",
+                "vitamin_b12_ug",
+                "calcium_mg",
+                "iron_mg",
+                "magnesium_mg",
+                "phosphorus_mg",
+                "potassium_mg",
+                "zinc_mg",
+                "selenium_ug"
+              ]
+            },
+            "type": "object",
+            "title": "Ranges",
+            "description": "The range that applies now per nutrient (the user's goal, else the reference)"
+          },
+          "current": {
+            "$ref": "#/components/schemas/InsightsPeriodResponse"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/InsightsPeriodResponse",
+            "description": "The same number of days, ending the day before `from`"
+          }
+        },
+        "type": "object",
+        "required": [
+          "counting_rule",
+          "ranges",
+          "current",
+          "previous"
+        ],
+        "title": "MicronutrientInsightsResponse"
+      },
       "MicronutrientRangeModel": {
         "properties": {
           "min": {
@@ -3832,6 +4091,65 @@
           "source"
         ],
         "title": "MicronutrientRangeModel"
+      },
+      "NutrientInsightResponse": {
+        "properties": {
+          "average": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptionalAverageResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Over the counted days on which every meal has a value; null if none"
+          },
+          "range_days": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RangeDaysResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "On the days the average uses: how many day totals were below, within or above the range that applies now. Null without a range or without such days"
+          },
+          "weeks": {
+            "items": {
+              "$ref": "#/components/schemas/WeekAverageResponse"
+            },
+            "type": "array",
+            "title": "Weeks",
+            "description": "Every week of the period, oldest first"
+          },
+          "food_sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceResponse"
+            },
+            "type": "array",
+            "title": "Food Sources",
+            "description": "Up to 5 foods (USDA values) with the largest amounts, from every meal"
+          },
+          "label_sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceResponse"
+            },
+            "type": "array",
+            "title": "Label Sources",
+            "description": "Up to 5 items with label values (supplements, packaged foods)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "average",
+          "range_days",
+          "weeks",
+          "food_sources",
+          "label_sources"
+        ],
+        "title": "NutrientInsightResponse"
       },
       "NutrientTotalResponse": {
         "properties": {
@@ -4054,6 +4372,29 @@
           "meals"
         ],
         "title": "ProteinBucketResponse"
+      },
+      "RangeDaysResponse": {
+        "properties": {
+          "below": {
+            "type": "integer",
+            "title": "Below"
+          },
+          "within": {
+            "type": "integer",
+            "title": "Within"
+          },
+          "above": {
+            "type": "integer",
+            "title": "Above"
+          }
+        },
+        "type": "object",
+        "required": [
+          "below",
+          "within",
+          "above"
+        ],
+        "title": "RangeDaysResponse"
       },
       "ReferenceRangeModel": {
         "properties": {
@@ -4461,6 +4802,37 @@
         "title": "SettingsUpdate",
         "description": "Only the fields present are changed. null clears the time zone or a target."
       },
+      "SourceResponse": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "The item's name; items are grouped ignoring case"
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount",
+            "description": "Sum over the period (the unit is the code's suffix)"
+          },
+          "share": {
+            "type": "number",
+            "title": "Share",
+            "description": "Share of all items' amounts of this nutrient (0 to 1)"
+          },
+          "meals": {
+            "type": "integer",
+            "title": "Meals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "amount",
+          "share",
+          "meals"
+        ],
+        "title": "SourceResponse"
+      },
       "TargetRangeModel": {
         "properties": {
           "min": {
@@ -4644,6 +5016,47 @@
           "meals"
         ],
         "title": "UsualMealsResponse"
+      },
+      "WeekAverageResponse": {
+        "properties": {
+          "first_day": {
+            "type": "string",
+            "format": "date",
+            "title": "First Day",
+            "description": "Monday, or the period's first day"
+          },
+          "last_day": {
+            "type": "string",
+            "format": "date",
+            "title": "Last Day",
+            "description": "Sunday, or the period's last day"
+          },
+          "average": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average",
+            "description": "Over the week's counted days on which every meal has a value; else null"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days",
+            "description": "How many days the average uses"
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_day",
+          "last_day",
+          "average",
+          "days"
+        ],
+        "title": "WeekAverageResponse"
       },
       "WeeklyReviewResponse": {
         "properties": {

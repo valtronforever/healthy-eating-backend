@@ -43,7 +43,8 @@ Totals per local day from HealthyEating: calories, protein, fat and carbohydrate
 meals, how much of the calories the assistant estimated, and whether the day is marked
 complete. Use it when the user asks how much they have eaten today or on other days. It also
 gives vitamins and minerals from the meals' food items (USDA reference data); when they cover
-only some of the day's meals (meal_count), say so, and state them as plain amounts.
+only some of the day's meals (meal_count), say so, and state them as plain amounts. For a
+vitamin or mineral over weeks, use get_micronutrient_insights.
 """
     + READING_RULES
 )

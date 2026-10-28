@@ -60,19 +60,33 @@ class Trends:
     change: dict[NutrientField, float] | None
 
 
+def counted_days(days: list[DaySummary], today: date) -> list[DaySummary]:
+    """The days averages use: counted ones, and today only once it is marked complete."""
+    return [
+        day for day in days if day.counted and (day.local_date != today or day.status == "complete")
+    ]
+
+
+def covered_totals(counted: list[DaySummary], code: Micronutrient) -> list[tuple[date, float]]:
+    """A vitamin's or mineral's day totals on the counted days on which every meal has a value.
+
+    A day where only some meals have food items would pull an average down, so it is left out.
+    """
+    return [
+        (day.local_date, day.micronutrients[code].amount)
+        for day in counted
+        if code in day.micronutrients and day.micronutrients[code].meal_count == day.meal_count
+    ]
+
+
 def micronutrient_averages(counted: list[DaySummary]) -> dict[Micronutrient, OptionalAverage]:
     """Vitamins and minerals over the counted days on which every meal has a value.
 
-    A day where only some meals have food items would pull the average down, so it is left out
-    for that nutrient; `days` says how many days each average uses. Shared with the weekly review.
+    `days` says how many days each average uses. Shared with the weekly review and the insights.
     """
     averages = {}
     for code in MICRONUTRIENTS:
-        amounts = [
-            day.micronutrients[code].amount
-            for day in counted
-            if code in day.micronutrients and day.micronutrients[code].meal_count == day.meal_count
-        ]
+        amounts = [amount for _, amount in covered_totals(counted, code)]
         if amounts:
             averages[code] = OptionalAverage(
                 average=round(sum(amounts) / len(amounts), 2), days=len(amounts)
@@ -81,9 +95,7 @@ def micronutrient_averages(counted: list[DaySummary]) -> dict[Micronutrient, Opt
 
 
 def _period(days: list[DaySummary], today: date) -> Period:
-    counted = [
-        day for day in days if day.counted and (day.local_date != today or day.status == "complete")
-    ]
+    counted = counted_days(days, today)
     averages = None
     share = None
     if counted:

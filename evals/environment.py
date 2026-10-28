@@ -182,7 +182,12 @@ class EvalEnvironment:
                         for name in NUTRIENT_FIELDS
                         for bound in ("min", "max")
                     }
-                    | {"calm_mode": False, "weight_tracking": False}
+                    | {
+                        "calm_mode": False,
+                        "weight_tracking": False,
+                        "reference_group": None,
+                        "micronutrient_goals": {},
+                    }
                 )
             )
             await session.execute(text("DELETE FROM day_statuses"))
@@ -290,6 +295,7 @@ class EvalEnvironment:
         minutes_ago: int = 30,
         portion_grams: float | None = None,
         source_note: str | None = None,
+        micronutrients: dict[str, float] | None = None,
     ) -> Meal:
         """Save a meal for the eval user directly, as if an earlier conversation had logged it."""
         calories, protein, fat, carbs = values
@@ -308,6 +314,8 @@ class EvalEnvironment:
                 portion_grams=portion_grams,
                 source_note=source_note,
             )
+            if micronutrients is not None:
+                meal.micronutrients = micronutrients
             session.add(meal)
         return meal
 

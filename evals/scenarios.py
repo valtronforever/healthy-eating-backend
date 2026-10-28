@@ -484,6 +484,65 @@ async def vitamin_goal(env: EvalEnvironment, checks: Checks, turns: list[Turn]) 
     checks.require("no judgment of the goal", not JUDGMENT.search(turn.reply), turn.reply[-300:])
 
 
+# The tools that change data (server INSTRUCTIONS list them the same way).
+WRITE_TOOLS = frozenset(
+    {
+        "log_meal",
+        "relog_meal",
+        "import_meals",
+        "delete_meal",
+        "set_day_status",
+        "set_timezone",
+        "set_targets",
+        "log_weight",
+        "delete_weight",
+    }
+)
+ADVICE = re.compile(
+    r"\b(you should|try (eating|adding|to eat)|consider (eating|adding|taking)|"
+    r"eat more|take a supplement)\b",
+    re.IGNORECASE,
+)
+
+
+async def iron_this_month(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    await env.change_settings(
+        SettingsChanges(micronutrient_goals={"iron_mg": TargetRange(min=18, max=45)})
+    )
+    for days, iron in ((3, 12.0), (6, 9.5), (10, 15.0), (13, 11.0), (17, 8.0), (20, 14.5)):
+        await env.add_meal(
+            "Lentil soup with bread",
+            (520, 24, 12, 78),
+            minutes_ago=days * 24 * 60,
+            micronutrients={"iron_mg": iron},
+        )
+    # Two meals without food items: no vitamin or mineral values.
+    for days in (4, 11):
+        await env.add_meal("Pizza", (800, 30, 30, 95), minutes_ago=days * 24 * 60)
+    turn = await env.chat(CHAT.name, "How was my iron over the last four weeks?")
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    assert env.proxy is not None
+    reads = env.proxy.tool_calls("get_micronutrient_insights")
+    checks.require("read the insights", bool(reads), str([call.name for call in env.proxy.calls]))
+    writes = [call for call in env.proxy.calls if call.name in WRITE_TOOLS]
+    checks.require("nothing changed", not writes, str([call.name for call in writes]))
+    checks.require("no judgment of the intake", not JUDGMENT.search(turn.reply), turn.reply[-400:])
+    checks.require("no advice what to eat", not ADVICE.search(turn.reply), turn.reply[-400:])
+    checks.note(
+        "says the values cover only some meals",
+        bool(
+            re.search(
+                r"\b(8|eight)\b[^.]{0,30}\bmeals\b|\bof (the )?(8|eight)\b",
+                turn.reply,
+                re.IGNORECASE,
+            )
+        ),
+        turn.reply[-400:],
+    )
+
+
 CALORIES = re.compile(r"kcal|calorie|\bkj\b|kilojoule", re.IGNORECASE)
 
 
@@ -896,6 +955,11 @@ SCENARIOS = [
         "vitamin_goal",
         "A daily vitamin D amount from the user's doctor: stored as a goal from 50 µg",
         vitamin_goal,
+    ),
+    Scenario(
+        "iron_this_month",
+        "Iron over four weeks with a goal: read with get_micronutrient_insights, neutrally",
+        iron_this_month,
     ),
     Scenario(
         "calm_mode_targets",

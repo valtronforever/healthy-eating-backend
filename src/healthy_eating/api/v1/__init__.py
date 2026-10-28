@@ -10,6 +10,7 @@ from healthy_eating.api.v1 import (
     logins,
     me,
     meals,
+    micronutrients,
     settings,
     trends,
     weekly_review,
@@ -30,6 +31,7 @@ router.include_router(settings.router)
 router.include_router(meals.router)
 router.include_router(days.router)
 router.include_router(trends.router)
+router.include_router(micronutrients.router)
 router.include_router(weekly_review.router)
 router.include_router(weights.router)
 router.include_router(expenditure.router)
