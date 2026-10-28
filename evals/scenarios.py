@@ -463,6 +463,27 @@ async def single_number_target(env: EvalEnvironment, checks: Checks, turns: list
     checks.require("no judgment of the target", not JUDGMENT.search(turn.reply), turn.reply[-300:])
 
 
+async def vitamin_goal(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    turn = await env.chat(
+        CHAT.name,
+        "My doctor told me to get 50 µg of vitamin D a day. Please save that as my goal.",
+    )
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    goals = await env.micronutrient_goals()
+    checks.require(
+        "vitamin D goal stored as from 50 µg",
+        goals.get("vitamin_d_ug") == TargetRange(min=50, max=None),
+        str(goals),
+    )
+    checks.require("no other goal set", set(goals) <= {"vitamin_d_ug"}, str(goals))
+    stored = await env.targets()
+    checks.require("no target set", all(t is None for t in stored.values()), str(stored))
+    checks.require("user told the goal was saved", confirms_saved(turn.reply), turn.reply[-300:])
+    checks.require("no judgment of the goal", not JUDGMENT.search(turn.reply), turn.reply[-300:])
+
+
 CALORIES = re.compile(r"kcal|calorie|\bkj\b|kilojoule", re.IGNORECASE)
 
 
@@ -870,6 +891,11 @@ SCENARIOS = [
         "single_number_target",
         "A single-number target: nothing stored, the assistant asks for a range",
         single_number_target,
+    ),
+    Scenario(
+        "vitamin_goal",
+        "A daily vitamin D amount from the user's doctor: stored as a goal from 50 µg",
+        vitamin_goal,
     ),
     Scenario(
         "calm_mode_targets",

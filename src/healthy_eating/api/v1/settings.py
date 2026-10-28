@@ -1,4 +1,4 @@
-from typing import Self
+from typing import Literal, Self
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -19,6 +19,7 @@ from healthy_eating.services.settings import (
     TargetRange,
     UserSettings,
     get_settings,
+    micronutrient_ranges,
     update_settings,
     validate_time_zone,
 )
@@ -56,6 +57,14 @@ class ReferenceRangeModel(BaseModel):
     max: float | None
 
 
+class MicronutrientRangeModel(BaseModel):
+    min: float | None
+    max: float | None
+    source: Literal["reference", "personal"] = Field(
+        description="`personal`: the user's own goal; `reference`: the life stage reference"
+    )
+
+
 class SettingsResponse(BaseModel):
     timezone: str | None = Field(
         description="IANA time zone, e.g. 'Europe/Berlin'; null if unknown"
@@ -82,6 +91,19 @@ class SettingsResponse(BaseModel):
             "Dietary Reference Intakes for the life stage. Empty when reference_group is null"
         )
     )
+    micronutrient_goals: dict[Micronutrient, TargetRangeModel] = Field(
+        description=(
+            "The user's own daily ranges for vitamins and minerals (unit: the code's suffix); "
+            "only nutrients with a goal are listed"
+        )
+    )
+    micronutrient_ranges: dict[Micronutrient, MicronutrientRangeModel] = Field(
+        description=(
+            "The range that applies per vitamin and mineral: the user's goal, else the life "
+            "stage reference. Nutrients with neither are left out. Show these, as neutral "
+            "ranges"
+        )
+    )
 
 
 class SettingsUpdate(BaseModel):
@@ -100,6 +122,13 @@ class SettingsUpdate(BaseModel):
             "are still accepted and stored as `women_31_50` and `men_31_50`"
         ),
     )
+    micronutrient_goals: dict[Micronutrient, TargetRangeModel | None] | None = Field(
+        default=None,
+        description=(
+            "Only the nutrients listed change; null for a nutrient removes its goal, so its "
+            "reference applies again"
+        ),
+    )
 
     @field_validator("timezone")
     @classmethod
@@ -113,7 +142,14 @@ class SettingsUpdate(BaseModel):
 
     @model_validator(mode="after")
     def _check_not_null(self) -> Self:
-        for name in ("energy_unit", "calm_mode", "targets", "weight_tracking", "weight_unit"):
+        for name in (
+            "energy_unit",
+            "calm_mode",
+            "targets",
+            "weight_tracking",
+            "weight_unit",
+            "micronutrient_goals",
+        ):
             if name in self.model_fields_set and getattr(self, name) is None:
                 raise ValueError(f"{name} cannot be null")
         return self
@@ -137,6 +173,10 @@ class SettingsUpdate(BaseModel):
             reference_group=(
                 _current_group(self.reference_group) if "reference_group" in fields else UNSET
             ),
+            micronutrient_goals={
+                code: None if goal is None else TargetRange(goal.min, goal.max)
+                for code, goal in (self.micronutrient_goals or {}).items()
+            },
         )
 
 
@@ -164,6 +204,14 @@ def _response(settings: UserSettings) -> SettingsResponse:
             for code, reference in (
                 REFERENCE_INTAKES[settings.reference_group] if settings.reference_group else {}
             ).items()
+        },
+        micronutrient_goals={
+            code: TargetRangeModel(min=goal.min, max=goal.max)
+            for code, goal in settings.micronutrient_goals.items()
+        },
+        micronutrient_ranges={
+            code: MicronutrientRangeModel(min=found.min, max=found.max, source=found.source)
+            for code, found in micronutrient_ranges(settings).items()
         },
     )
 

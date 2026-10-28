@@ -1,5 +1,5 @@
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
@@ -7,11 +7,19 @@ from pydantic import BaseModel, Field
 
 from healthy_eating.db import Database
 from healthy_eating.mcp_server.context import current_user_id
+from healthy_eating.nutrition.micronutrients import (
+    MICRONUTRIENT_INFO,
+    MICRONUTRIENTS,
+    Micronutrient,
+    ReferenceGroup,
+)
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, EnergyUnit, NutrientField
 from healthy_eating.services.settings import (
     InvalidSettingsError,
     SettingsChanges,
+    UserSettings,
     get_settings,
+    micronutrient_ranges,
     set_targets_from_chat,
     update_settings,
     visible_targets,
@@ -31,14 +39,21 @@ for HealthyEating.
 
 SET_TARGETS_DESCRIPTION = """\
 Store the user's daily target ranges in HealthyEating: energy in kcal (convert kJ first),
-protein, fat and carbohydrates in g.
-Call it only when the user states or confirms their own targets (for example "I'm aiming
-for 1800 to 2100 kcal and at least 120 g protein"). Never suggest, ask for or change targets
-on your own, and never comment on whether a target is high or low.
+protein, fat and carbohydrates in g, and goals for vitamins and minerals in
+`vitamins_and_minerals` (unit: the code's suffix, mg or ug = µg; convert IU only where exact,
+for example vitamin D 40 IU = 1 µg).
+Call it only when the user states or confirms their own targets or goals (for example "I'm
+aiming for 1800 to 2100 kcal and at least 120 g protein", or "my doctor told me to get 50 µg
+vitamin D a day"). Never suggest, ask for or change targets or goals on your own, and never
+comment on whether one is high or low.
 Targets are ranges, never limits or single numbers: give min, max or both. When the user
-names a single number (for example "2000 kcal a day"), do not call this tool yet; ask which
-range they want, such as from-to, at least or at most.
-Targets you leave out stay as they are; put a target in `clear` to remove it.
+names a single number for calories or a macro (for example "2000 kcal a day"), do not call
+this tool yet; ask which range they want, such as from-to, at least or at most. An amount of a
+vitamin or mineral the user should get or reach each day is a lower bound: save it as min
+(for example vitamin_d_ug min 50). Ask only when it is unclear whether it is a lower or an
+upper bound.
+Targets and goals you leave out stay as they are; put one in `clear` to remove it (a removed
+vitamin or mineral goal falls back to the reference range of the user's life stage).
 When get_profile shows calm_mode, do not bring up calories or a calorie target, and leave
 calories_kcal out of this call (a call with it is rejected): Calm mode hides calories, so
 save only the other targets.
@@ -48,6 +63,12 @@ save only the other targets.
 class TargetRange(BaseModel):
     min: float | None = Field(description="Lower bound, or null if open")
     max: float | None = Field(description="Upper bound, or null if open")
+
+
+class MicronutrientRange(BaseModel):
+    min: float | None = Field(description="Lower bound, or null if open")
+    max: float | None = Field(description="Upper bound, or null if open")
+    source: Literal["personal", "reference"]
 
 
 class Profile(BaseModel):
@@ -75,6 +96,18 @@ class Profile(BaseModel):
             "under is not good or bad"
         )
     )
+    reference_group: ReferenceGroup | None = Field(
+        description="Life stage the user picked for vitamin and mineral references; null if none"
+    )
+    vitamin_and_mineral_ranges: dict[Micronutrient, MicronutrientRange] = Field(
+        description=(
+            "The daily range that applies per vitamin and mineral (unit: the code's suffix): "
+            "the user's own goal (source personal), else the reference for their life stage "
+            "(source reference). Nutrients with neither are left out. Ranges, never limits: "
+            "being over or under is not good or bad, and never bring them up unless the user "
+            "asks"
+        )
+    )
 
 
 class TargetRangeInput(BaseModel):
@@ -91,6 +124,9 @@ class SetTargetsResult(BaseModel):
             "calories_kcal in Calm mode"
         )
     )
+    vitamin_and_mineral_goals: dict[Micronutrient, TargetRange] = Field(
+        description="All of the user's own vitamin and mineral goals now stored"
+    )
 
 
 TARGET_LABELS: dict[NutrientField, str] = {
@@ -101,31 +137,45 @@ TARGET_LABELS: dict[NutrientField, str] = {
 }
 
 
-def _number(value: float) -> str:
-    # At most one decimal and never scientific notation: "2100", "250.5", "2000000".
-    rounded = round(value, 1)
-    return str(int(rounded)) if rounded.is_integer() else str(rounded)
+def _micronutrient_label(code: Micronutrient) -> str:
+    # "vitamin D", "thiamin (B1)", "iron": lower case inside a sentence.
+    label = MICRONUTRIENT_INFO[code].label
+    return label[0].lower() + label[1:]
 
 
-def _amount(value: float, unit: str) -> str:
-    return f"{_number(value)} {unit}"
+def _number(value: float, digits: int = 1) -> str:
+    # At most `digits` decimals and never scientific notation: "2100", "250.5", "2000000".
+    rounded = round(value, digits)
+    return str(int(rounded)) if rounded.is_integer() else f"{rounded:.{digits}f}".rstrip("0")
+
+
+def _amount(value: float, unit: str, digits: int = 1) -> str:
+    return f"{_number(value, digits)} {unit}"
+
+
+def _describe_range(target: ServiceTargetRange, unit: str, digits: int = 1) -> str:
+    if target.min is not None and target.max is not None:
+        return f"{_number(target.min, digits)} to {_amount(target.max, unit, digits)}"
+    if target.min is not None:
+        return f"from {_amount(target.min, unit, digits)}"
+    assert target.max is not None
+    return f"up to {_amount(target.max, unit, digits)}"
 
 
 def _describe_target(name: NutrientField, target: ServiceTargetRange) -> str:
-    unit = "kcal" if name == "calories_kcal" else "g"
-    if target.min is not None and target.max is not None:
-        text = f"{_number(target.min)} to {_amount(target.max, unit)}"
-    elif target.min is not None:
-        text = f"from {_amount(target.min, unit)}"
-    else:
-        assert target.max is not None
-        text = f"up to {_amount(target.max, unit)}"
+    text = _describe_range(target, "kcal" if name == "calories_kcal" else "g")
     # "1800 to 2100 kcal" names itself; macros need their name.
     return text if name == "calories_kcal" else f"{TARGET_LABELS[name]} {text}"
 
 
+def _describe_goal(code: Micronutrient, goal: ServiceTargetRange) -> str:
+    return f"{_micronutrient_label(code)} {_describe_range(goal, MICRONUTRIENT_INFO[code].unit, 2)}"
+
+
 def _targets_message(
-    targets: dict[NutrientField, ServiceTargetRange], clear: list[NutrientField]
+    targets: dict[NutrientField, ServiceTargetRange],
+    goals: dict[Micronutrient, ServiceTargetRange],
+    clear: list[NutrientField | Micronutrient],
 ) -> str:
     parts = [
         _describe_target(name, targets[name])
@@ -134,7 +184,31 @@ def _targets_message(
         for name in NUTRIENT_FIELDS
         if name in targets or name in clear
     ]
-    return f"Saved targets to HealthyEating: {', '.join(parts)}."
+    parts += [
+        _describe_goal(code, goals[code])
+        if code in goals
+        else f"no own {_micronutrient_label(code)} goal"
+        for code in MICRONUTRIENTS
+        if code in goals or code in clear
+    ]
+    noun = (
+        "targets" if any(name in targets or name in clear for name in NUTRIENT_FIELDS) else "goals"
+    )
+    return f"Saved {noun} to HealthyEating: {', '.join(parts)}."
+
+
+def _shown_ranges(settings: UserSettings) -> dict[Micronutrient, MicronutrientRange]:
+    return {
+        code: MicronutrientRange(min=found.min, max=found.max, source=found.source)
+        for code, found in micronutrient_ranges(settings).items()
+    }
+
+
+def _shown_goals(settings: UserSettings) -> dict[Micronutrient, TargetRange]:
+    return {
+        code: TargetRange(min=goal.min, max=goal.max)
+        for code, goal in settings.micronutrient_goals.items()
+    }
 
 
 def _shown_targets(
@@ -177,6 +251,8 @@ def register(mcp: FastMCP, db: Database) -> None:
             energy_unit=settings.energy_unit,
             calm_mode=settings.calm_mode,
             targets=_shown_targets(visible_targets(settings)),
+            reference_group=settings.reference_group,
+            vitamin_and_mineral_ranges=_shown_ranges(settings),
         )
 
     @mcp.tool(
@@ -235,9 +311,19 @@ def register(mcp: FastMCP, db: Database) -> None:
         carbohydrates_g: Annotated[
             TargetRangeInput | None, Field(description=_target("carbohydrate", "g"))
         ] = None,
+        vitamins_and_minerals: Annotated[
+            dict[Micronutrient, TargetRangeInput] | None,
+            Field(
+                description=(
+                    "Daily goal ranges for vitamins and minerals by code, in the code's unit "
+                    "(mg or ug = µg). Leave a code out to leave its goal unchanged; to remove "
+                    "one, list it in clear"
+                )
+            ),
+        ] = None,
         clear: Annotated[
-            list[NutrientField] | None,
-            Field(description="Targets to remove, only when the user asks to remove them"),
+            list[NutrientField | Micronutrient] | None,
+            Field(description="Targets or goals to remove, only when the user asks to remove them"),
         ] = None,
     ) -> SetTargetsResult:
         given: dict[NutrientField, TargetRangeInput | None] = {
@@ -251,16 +337,23 @@ def register(mcp: FastMCP, db: Database) -> None:
             for name, target in given.items()
             if target is not None
         }
+        goals = {
+            code: ServiceTargetRange(min=goal.min, max=goal.max)
+            for code, goal in (vitamins_and_minerals or {}).items()
+        }
         clear = list(dict.fromkeys(clear or []))
         try:
             async with db.session() as session:
-                settings = await set_targets_from_chat(session, current_user_id(), targets, clear)
+                settings = await set_targets_from_chat(
+                    session, current_user_id(), targets, clear, goals
+                )
         except InvalidSettingsError as error:
             raise ToolError(f"Targets not saved to HealthyEating: {error}") from None
         if settings is None:
             raise ToolError("User not found")
         return SetTargetsResult(
             saved_to_healthy_eating=True,
-            user_message=_targets_message(targets, clear),
+            user_message=_targets_message(targets, goals, clear),
             targets=_shown_targets(visible_targets(settings)),
+            vitamin_and_mineral_goals=_shown_goals(settings),
         )

@@ -13,6 +13,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy import false as sa_false
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
@@ -81,6 +82,12 @@ class User(TimestampMixin, Base):
     weight_unit: Mapped[str] = mapped_column(String(2), default="kg", server_default="kg")
     # Reference values for vitamins and minerals (nutrition/micronutrients.py); NULL = off.
     reference_group: Mapped[str | None] = mapped_column(String(24))
+    # The user's own daily ranges for vitamins and minerals (#35), {code: {"min", "max"}} in the
+    # code's unit; they replace the reference range of that nutrient. Validated in
+    # services/settings.py.
+    micronutrient_goals: Mapped[dict[str, dict[str, float | None]]] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb")
+    )
     # Daily target ranges in canonical units; either bound may be open (NULL).
     target_calories_kcal_min: Mapped[float | None]
     target_calories_kcal_max: Mapped[float | None]

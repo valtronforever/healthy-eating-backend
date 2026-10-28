@@ -47,6 +47,8 @@ async def test_new_user_has_default_settings(http: httpx.AsyncClient, token: str
         "weight_unit": "kg",
         "reference_group": None,
         "micronutrient_references": {},
+        "micronutrient_goals": {},
+        "micronutrient_ranges": {},
     }
 
 
@@ -79,6 +81,8 @@ async def test_patch_changes_only_the_given_settings(http: httpx.AsyncClient, to
         "weight_unit": "kg",
         "reference_group": None,
         "micronutrient_references": {},
+        "micronutrient_goals": {},
+        "micronutrient_ranges": {},
     }
 
     response = await patch(http, token, {"calm_mode": True, "targets": {"protein_g": None}})

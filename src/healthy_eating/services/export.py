@@ -152,6 +152,10 @@ async def _header(session: AsyncSession, user_id: uuid.UUID, now: datetime) -> _
                 name: None if target is None else {"min": target.min, "max": target.max}
                 for name, target in settings.targets.items()
             },
+            "micronutrient_goals": {
+                code: {"min": goal.min, "max": goal.max}
+                for code, goal in settings.micronutrient_goals.items()
+            },
         },
         connections=[
             {
@@ -334,6 +338,9 @@ def _settings_rows(settings: dict[str, Any]) -> list[dict[str, Any]]:
         for bound in ("min", "max"):
             value = None if target is None else target[bound]
             rows.append({"setting": f"target_{nutrient}_{bound}", "value": value})
+    for code, goal in settings["micronutrient_goals"].items():
+        for bound in ("min", "max"):
+            rows.append({"setting": f"goal_{code}_{bound}", "value": goal[bound]})
     return rows
 
 

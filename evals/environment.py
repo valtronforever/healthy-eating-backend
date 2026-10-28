@@ -47,6 +47,7 @@ from healthy_eating.db.models import (
     User,
     WeightEntry,
 )
+from healthy_eating.nutrition.micronutrients import Micronutrient
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, NutrientField
 from healthy_eating.services.settings import (
     SettingsChanges,
@@ -266,6 +267,14 @@ class EvalEnvironment:
             settings = await get_settings(session, self.user_id)
         assert settings is not None
         return settings.targets
+
+    async def micronutrient_goals(self) -> dict[Micronutrient, TargetRange]:
+        """The eval user's own vitamin and mineral goals."""
+        assert self.user_id is not None
+        async with self.db.session() as session:
+            settings = await get_settings(session, self.user_id)
+        assert settings is not None
+        return settings.micronutrient_goals
 
     async def change_settings(self, changes: SettingsChanges) -> None:
         """Change the eval user's settings directly, as if they had done it in the app."""

@@ -32,9 +32,10 @@ their meaning.
  "logins": [{"provider": "google", "email": "…", "email_verified": true,
              "created_at": "…", "last_login_at": "…"}],
  "settings": {"timezone": "Europe/Berlin", "energy_unit": "kcal", "calm_mode": false,
-              "weight_tracking": true, "weight_unit": "kg", "reference_group": null,
+              "weight_tracking": true, "weight_unit": "kg", "reference_group": "women_31_50",
               "targets": {"calories_kcal": {"min": 1800, "max": 2200}, "protein_g": null,
-                          "fat_g": null, "carbohydrates_g": null}},
+                          "fat_g": null, "carbohydrates_g": null},
+              "micronutrient_goals": {"vitamin_d_ug": {"min": 50, "max": null}}},
  "connections": [{"client_name": "Claude", "kind": "ai_assistant", "created_at": "…",
                   "last_used_at": "…", "revoked_at": null}],
  "day_statuses": [{"date": "2026-10-18", "status": "complete", "set_by": "user",
@@ -82,7 +83,7 @@ their meaning.
 |---|---|
 | `account.json` | `format_version`, `exported_at` and the `account` object as above |
 | `logins.csv` | `provider, email, email_verified, created_at, last_login_at` |
-| `settings.csv` | `setting, value`: `timezone`, `energy_unit`, `calm_mode`, `weight_tracking`, `weight_unit`, `reference_group`, `target_<nutrient>_<min\|max>` |
+| `settings.csv` | `setting, value`: `timezone`, `energy_unit`, `calm_mode`, `weight_tracking`, `weight_unit`, `reference_group`, `target_<nutrient>_<min\|max>`, `goal_<vitamin or mineral>_<min\|max>` (only goals the user set) |
 | `connections.csv` | `client_name, kind, created_at, last_used_at, revoked_at` |
 | `day_statuses.csv` | `date, status, set_by, from_import, updated_at` |
 | `weights.csv` | The weigh-in fields above, in that order |
