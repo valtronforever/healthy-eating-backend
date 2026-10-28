@@ -4135,8 +4135,18 @@
               {
                 "type": "string",
                 "enum": [
-                  "adult_women",
-                  "adult_men"
+                  "women_19_30",
+                  "women_31_50",
+                  "women_51_70",
+                  "women_71_plus",
+                  "men_19_30",
+                  "men_31_50",
+                  "men_51_70",
+                  "men_71_plus",
+                  "pregnancy_19_30",
+                  "pregnancy_31_50",
+                  "breastfeeding_19_30",
+                  "breastfeeding_31_50"
                 ]
               },
               {
@@ -4144,7 +4154,7 @@
               }
             ],
             "title": "Reference Group",
-            "description": "Reference values for vitamins and minerals; null when off (the default)"
+            "description": "Life stage for the vitamin and mineral reference values; null when off (the default)"
           },
           "micronutrient_references": {
             "additionalProperties": {
@@ -4174,7 +4184,7 @@
             },
             "type": "object",
             "title": "Micronutrient References",
-            "description": "The group's reference range per vitamin and mineral (unit: the code's suffix): `min` is the RDA or AI, `max` the upper limit where it applies to food, else null. US Dietary Reference Intakes, adults 19 to 50. Empty when reference_group is null"
+            "description": "The group's reference range per vitamin and mineral (unit: the code's suffix): `min` is the RDA or AI, `max` the upper limit where it applies to food, else null. US Dietary Reference Intakes for the life stage. Empty when reference_group is null"
           }
         },
         "type": "object",
@@ -4270,6 +4280,23 @@
               {
                 "type": "string",
                 "enum": [
+                  "women_19_30",
+                  "women_31_50",
+                  "women_51_70",
+                  "women_71_plus",
+                  "men_19_30",
+                  "men_31_50",
+                  "men_51_70",
+                  "men_71_plus",
+                  "pregnancy_19_30",
+                  "pregnancy_31_50",
+                  "breastfeeding_19_30",
+                  "breastfeeding_31_50"
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
                   "adult_women",
                   "adult_men"
                 ]
@@ -4279,7 +4306,7 @@
               }
             ],
             "title": "Reference Group",
-            "description": "null turns the reference values off"
+            "description": "null turns the reference values off. The old names `adult_women` and `adult_men` are still accepted and stored as `women_31_50` and `men_31_50`"
           }
         },
         "type": "object",

@@ -162,4 +162,6 @@ Vitamins and minerals come from [USDA FoodData Central](https://fdc.nal.usda.gov
 Foundation Foods and SR Legacy), which is public domain (CC0 1.0). The server bundles a trimmed
 copy in `src/healthy_eating/nutrition/data/` and loads it into Postgres at startup; nothing is
 fetched at runtime. Optional reference ranges use the US Dietary Reference Intakes (National
-Academies) for adults 19 to 50, as published by the NIH Office of Dietary Supplements.
+Academies) for the life stage the user picks (women or men 19 to 30, 31 to 50, 51 to 70 or
+71 and older, pregnancy or breastfeeding 19 to 30 or 31 to 50), as published by the NIH Office
+of Dietary Supplements.

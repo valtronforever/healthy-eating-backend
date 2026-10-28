@@ -74,9 +74,30 @@ REFERENCE_DATASETS: tuple[ReferenceDataset, ...] = get_args(ReferenceDataset)
 ItemMatchStatus = Literal["matched", "weak", "none", "label"]
 ITEM_MATCH_STATUSES: tuple[ItemMatchStatus, ...] = get_args(ItemMatchStatus)
 
-# Optional reference group for vitamin and mineral reference ranges (Settings; off by default).
-ReferenceGroup = Literal["adult_women", "adult_men"]
+# Optional life stage for vitamin and mineral reference ranges (Settings; off by default). The
+# user picks it; no birth date or age is stored (owner decision 2026-10-27, #34). Adults only.
+ReferenceGroup = Literal[
+    "women_19_30",
+    "women_31_50",
+    "women_51_70",
+    "women_71_plus",
+    "men_19_30",
+    "men_31_50",
+    "men_51_70",
+    "men_71_plus",
+    "pregnancy_19_30",
+    "pregnancy_31_50",
+    "breastfeeding_19_30",
+    "breastfeeding_31_50",
+]
 REFERENCE_GROUPS: tuple[ReferenceGroup, ...] = get_args(ReferenceGroup)
+
+# The two groups before #34 used the values for ages 31 to 50; older apps may still send them.
+LegacyReferenceGroup = Literal["adult_women", "adult_men"]
+LEGACY_REFERENCE_GROUPS: dict[LegacyReferenceGroup, ReferenceGroup] = {
+    "adult_women": "women_31_50",
+    "adult_men": "men_31_50",
+}
 
 
 @dataclass(frozen=True)
@@ -87,46 +108,51 @@ class ReferenceRange:
     max: float | None
 
 
-# US Dietary Reference Intakes (National Academies), adults 19 to 50, as published by the NIH
-# Office of Dietary Supplements (ods.od.nih.gov, public domain). Upper limits that apply only to
-# supplements or synthetic forms (vitamin E, niacin, folate, magnesium, preformed vitamin A) are
-# left out: comparing food totals with them would mislead. Potassium uses the 2019 AI; magnesium
-# the 31 to 50 RDA. Vitamin K and potassium are AIs. Neutral reference values, never targets.
-_SHARED: dict[Micronutrient, ReferenceRange] = {
-    "vitamin_d_ug": ReferenceRange(15, 100),
-    "vitamin_e_mg": ReferenceRange(15, None),
-    "vitamin_b6_mg": ReferenceRange(1.3, 100),
-    "folate_ug": ReferenceRange(400, None),
-    "vitamin_b12_ug": ReferenceRange(2.4, None),
-    "calcium_mg": ReferenceRange(1000, 2500),
-    "phosphorus_mg": ReferenceRange(700, 4000),
-    "selenium_ug": ReferenceRange(55, 400),
+# US Dietary Reference Intakes (National Academies) as published by the NIH Office of Dietary
+# Supplements in its health professional fact sheets (ods.od.nih.gov, public domain; read
+# 2026-10-28). One column per group, in the order of REFERENCE_GROUPS:
+#   women 19-30, 31-50, 51-70, 71+ | men 19-30, 31-50, 51-70, 71+ |
+#   pregnancy 19-30, 31-50 | breastfeeding 19-30, 31-50
+# Minimums are RDAs, or AIs for vitamin K and potassium (the 2019 AI). Upper limits that apply
+# only to supplements or synthetic forms (vitamin E, niacin, folate, magnesium, preformed
+# vitamin A) are left out: comparing food totals with them would mislead. Vitamin K and B12,
+# thiamin, riboflavin and potassium have no upper limit. Neutral reference values, never targets.
+_MINIMUMS: dict[Micronutrient, tuple[float, ...]] = {
+    "vitamin_a_ug": (700, 700, 700, 700, 900, 900, 900, 900, 770, 770, 1300, 1300),
+    "vitamin_c_mg": (75, 75, 75, 75, 90, 90, 90, 90, 85, 85, 120, 120),
+    "vitamin_d_ug": (15, 15, 15, 20, 15, 15, 15, 20, 15, 15, 15, 15),
+    "vitamin_e_mg": (15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 19, 19),
+    "vitamin_k_ug": (90, 90, 90, 90, 120, 120, 120, 120, 90, 90, 90, 90),
+    "thiamin_mg": (1.1, 1.1, 1.1, 1.1, 1.2, 1.2, 1.2, 1.2, 1.4, 1.4, 1.4, 1.4),
+    "riboflavin_mg": (1.1, 1.1, 1.1, 1.1, 1.3, 1.3, 1.3, 1.3, 1.4, 1.4, 1.6, 1.6),
+    "niacin_mg": (14, 14, 14, 14, 16, 16, 16, 16, 18, 18, 17, 17),
+    "vitamin_b6_mg": (1.3, 1.3, 1.5, 1.5, 1.3, 1.3, 1.7, 1.7, 1.9, 1.9, 2.0, 2.0),
+    "folate_ug": (400, 400, 400, 400, 400, 400, 400, 400, 600, 600, 500, 500),
+    "vitamin_b12_ug": (2.4, 2.4, 2.4, 2.4, 2.4, 2.4, 2.4, 2.4, 2.6, 2.6, 2.8, 2.8),
+    "calcium_mg": (1000, 1000, 1200, 1200, 1000, 1000, 1000, 1200, 1000, 1000, 1000, 1000),
+    "iron_mg": (18, 18, 8, 8, 8, 8, 8, 8, 27, 27, 9, 9),
+    "magnesium_mg": (310, 320, 320, 320, 400, 420, 420, 420, 350, 360, 310, 320),
+    "phosphorus_mg": (700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700),
+    "potassium_mg": (2600, 2600, 2600, 2600, 3400, 3400, 3400, 3400, 2900, 2900, 2800, 2800),
+    "zinc_mg": (8, 8, 8, 8, 11, 11, 11, 11, 11, 11, 12, 12),
+    "selenium_ug": (55, 55, 55, 55, 55, 55, 55, 55, 60, 60, 70, 70),
+}
+_MAXIMUMS: dict[Micronutrient, tuple[float, ...]] = {
+    "vitamin_c_mg": (2000,) * 12,
+    "vitamin_d_ug": (100,) * 12,
+    "vitamin_b6_mg": (100,) * 12,
+    "calcium_mg": (2500, 2500, 2000, 2000, 2500, 2500, 2000, 2000, 2500, 2500, 2500, 2500),
+    "iron_mg": (45,) * 12,
+    "phosphorus_mg": (4000, 4000, 4000, 3000, 4000, 4000, 4000, 3000, 3500, 3500, 4000, 4000),
+    "zinc_mg": (40,) * 12,
+    "selenium_ug": (400,) * 12,
 }
 REFERENCE_INTAKES: dict[ReferenceGroup, dict[Micronutrient, ReferenceRange]] = {
-    "adult_women": {
-        **_SHARED,
-        "vitamin_a_ug": ReferenceRange(700, None),
-        "vitamin_c_mg": ReferenceRange(75, 2000),
-        "vitamin_k_ug": ReferenceRange(90, None),
-        "thiamin_mg": ReferenceRange(1.1, None),
-        "riboflavin_mg": ReferenceRange(1.1, None),
-        "niacin_mg": ReferenceRange(14, None),
-        "iron_mg": ReferenceRange(18, 45),
-        "magnesium_mg": ReferenceRange(320, None),
-        "potassium_mg": ReferenceRange(2600, None),
-        "zinc_mg": ReferenceRange(8, 40),
-    },
-    "adult_men": {
-        **_SHARED,
-        "vitamin_a_ug": ReferenceRange(900, None),
-        "vitamin_c_mg": ReferenceRange(90, 2000),
-        "vitamin_k_ug": ReferenceRange(120, None),
-        "thiamin_mg": ReferenceRange(1.2, None),
-        "riboflavin_mg": ReferenceRange(1.3, None),
-        "niacin_mg": ReferenceRange(16, None),
-        "iron_mg": ReferenceRange(8, 45),
-        "magnesium_mg": ReferenceRange(420, None),
-        "potassium_mg": ReferenceRange(3400, None),
-        "zinc_mg": ReferenceRange(11, 40),
-    },
+    group: {
+        code: ReferenceRange(
+            minimums[column], _MAXIMUMS[code][column] if code in _MAXIMUMS else None
+        )
+        for code, minimums in _MINIMUMS.items()
+    }
+    for column, group in enumerate(REFERENCE_GROUPS)
 }

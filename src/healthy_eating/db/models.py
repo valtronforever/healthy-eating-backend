@@ -80,7 +80,7 @@ class User(TimestampMixin, Base):
     weight_tracking: Mapped[bool] = mapped_column(default=False, server_default=sa_false())
     weight_unit: Mapped[str] = mapped_column(String(2), default="kg", server_default="kg")
     # Reference values for vitamins and minerals (nutrition/micronutrients.py); NULL = off.
-    reference_group: Mapped[str | None] = mapped_column(String(16))
+    reference_group: Mapped[str | None] = mapped_column(String(24))
     # Daily target ranges in canonical units; either bound may be open (NULL).
     target_calories_kcal_min: Mapped[float | None]
     target_calories_kcal_max: Mapped[float | None]

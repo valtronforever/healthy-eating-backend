@@ -5,7 +5,13 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from healthy_eating.api.deps import CurrentUserId, SessionDep
 from healthy_eating.api.errors import error_response
-from healthy_eating.nutrition.micronutrients import REFERENCE_INTAKES, Micronutrient, ReferenceGroup
+from healthy_eating.nutrition.micronutrients import (
+    LEGACY_REFERENCE_GROUPS,
+    REFERENCE_INTAKES,
+    LegacyReferenceGroup,
+    Micronutrient,
+    ReferenceGroup,
+)
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, EnergyUnit, NutrientField, WeightUnit
 from healthy_eating.services.settings import (
     InvalidSettingsError,
@@ -65,13 +71,15 @@ class SettingsResponse(BaseModel):
     )
     weight_unit: WeightUnit = Field(description="Unit to show weight in; values stay in kg")
     reference_group: ReferenceGroup | None = Field(
-        description="Reference values for vitamins and minerals; null when off (the default)"
+        description=(
+            "Life stage for the vitamin and mineral reference values; null when off (the default)"
+        )
     )
     micronutrient_references: dict[Micronutrient, ReferenceRangeModel] = Field(
         description=(
             "The group's reference range per vitamin and mineral (unit: the code's suffix): `min` "
             "is the RDA or AI, `max` the upper limit where it applies to food, else null. US "
-            "Dietary Reference Intakes, adults 19 to 50. Empty when reference_group is null"
+            "Dietary Reference Intakes for the life stage. Empty when reference_group is null"
         )
     )
 
@@ -85,8 +93,12 @@ class SettingsUpdate(BaseModel):
     targets: Targets | None = None
     weight_tracking: bool | None = None
     weight_unit: WeightUnit | None = None
-    reference_group: ReferenceGroup | None = Field(
-        default=None, description="null turns the reference values off"
+    reference_group: ReferenceGroup | LegacyReferenceGroup | None = Field(
+        default=None,
+        description=(
+            "null turns the reference values off. The old names `adult_women` and `adult_men` "
+            "are still accepted and stored as `women_31_50` and `men_31_50`"
+        ),
     )
 
     @field_validator("timezone")
@@ -122,8 +134,16 @@ class SettingsUpdate(BaseModel):
             targets=targets,
             weight_tracking=self.weight_tracking if self.weight_tracking is not None else UNSET,
             weight_unit=self.weight_unit if self.weight_unit is not None else UNSET,
-            reference_group=self.reference_group if "reference_group" in fields else UNSET,
+            reference_group=(
+                _current_group(self.reference_group) if "reference_group" in fields else UNSET
+            ),
         )
+
+
+def _current_group(group: ReferenceGroup | LegacyReferenceGroup | None) -> ReferenceGroup | None:
+    if group in LEGACY_REFERENCE_GROUPS:
+        return LEGACY_REFERENCE_GROUPS[group]
+    return group  # type: ignore[return-value]
 
 
 def _response(settings: UserSettings) -> SettingsResponse:
