@@ -22,6 +22,7 @@ from healthy_eating.db.models import (
     DayStatusRecord,
     Grant,
     Identity,
+    LabResult,
     Meal,
     OAuthClient,
     User,
@@ -74,6 +75,26 @@ WEIGHT_COLUMNS = [
     "created_at",
     "updated_at",
 ]
+LAB_RESULT_COLUMNS = [
+    "result_id",
+    "report_id",
+    "taken_on",
+    "position",
+    "name",
+    "analyte",
+    "value",
+    "comparator",
+    "unit",
+    "reference_low",
+    "reference_high",
+    "canonical_value",
+    "canonical_unit",
+    "canonical_low",
+    "canonical_high",
+    "client_name",
+    "created_at",
+    "updated_at",
+]
 CONNECTION_COLUMNS = ["client_name", "kind", "created_at", "last_used_at", "revoked_at"]
 LOGIN_COLUMNS = ["provider", "email", "email_verified", "created_at", "last_login_at"]
 SETTING_COLUMNS = ["setting", "value"]
@@ -96,6 +117,7 @@ class _Header:
     connections: list[dict[str, Any]]
     day_statuses: list[dict[str, Any]]
     weights: list[dict[str, Any]]
+    lab_results: list[dict[str, Any]]
     time_zone: str | None
 
 
@@ -117,6 +139,12 @@ async def _header(session: AsyncSession, user_id: uuid.UUID, now: datetime) -> _
         select(WeightEntry)
         .where(WeightEntry.user_id == user_id)
         .order_by(WeightEntry.measured_at, WeightEntry.id)
+    )
+    lab_results = await session.execute(
+        select(LabResult, OAuthClient.client_info["client_name"].astext)
+        .outerjoin(OAuthClient, OAuthClient.client_id == LabResult.client_id)
+        .where(LabResult.user_id == user_id)
+        .order_by(LabResult.taken_on, LabResult.created_at, LabResult.report_id, LabResult.position)
     )
     statuses = await session.scalars(
         select(DayStatusRecord)
@@ -178,6 +206,7 @@ async def _header(session: AsyncSession, user_id: uuid.UUID, now: datetime) -> _
             for status in statuses
         ],
         weights=[_weight(entry, user.timezone) for entry in weights],
+        lab_results=[_lab_result(row, client_name) for row, client_name in lab_results],
         time_zone=user.timezone,
     )
 
@@ -239,6 +268,29 @@ def _weight(entry: WeightEntry, time_zone: str | None) -> dict[str, Any]:
     }
 
 
+def _lab_result(row: LabResult, client_name: str | None) -> dict[str, Any]:
+    return {
+        "result_id": str(row.id),
+        "report_id": str(row.report_id),
+        "taken_on": row.taken_on.isoformat(),
+        "position": row.position,
+        "name": row.name,
+        "analyte": row.analyte,
+        "value": row.value,
+        "comparator": row.comparator,
+        "unit": row.unit,
+        "reference_low": row.reference_low,
+        "reference_high": row.reference_high,
+        "canonical_value": row.canonical_value,
+        "canonical_unit": row.canonical_unit,
+        "canonical_low": row.canonical_low,
+        "canonical_high": row.canonical_high,
+        "client_name": client_name,
+        "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at),
+    }
+
+
 async def _meal_batches(
     session: AsyncSession, user_id: uuid.UUID, time_zone: str | None
 ) -> AsyncIterator[list[dict[str, Any]]]:
@@ -267,6 +319,7 @@ async def export_json(db: Database, user_id: uuid.UUID, *, now: datetime) -> Asy
             "connections": header.connections,
             "day_statuses": header.day_statuses,
             "weights": header.weights,
+            "lab_results": header.lab_results,
         }
         # Everything but the closing brace, then the meals array piece by piece.
         yield (json.dumps(head, ensure_ascii=False, indent=1)[:-2] + ',\n "meals": [').encode()
@@ -362,6 +415,7 @@ async def export_csv_zip(
             _write_csv(archive, "connections.csv", CONNECTION_COLUMNS, header.connections)
             _write_csv(archive, "day_statuses.csv", DAY_STATUS_COLUMNS, header.day_statuses)
             _write_csv(archive, "weights.csv", WEIGHT_COLUMNS, header.weights)
+            _write_csv(archive, "lab_results.csv", LAB_RESULT_COLUMNS, header.lab_results)
             yield sink.take()
 
             with (

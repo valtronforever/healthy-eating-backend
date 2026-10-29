@@ -1905,6 +1905,270 @@
         ]
       }
     },
+    "/api/v1/lab-results": {
+      "get": {
+        "tags": [
+          "lab results"
+        ],
+        "summary": "Read Lab Results",
+        "description": "The user's lab reports with their results. Lab results are saved from the chat only.",
+        "operationId": "listLabResults",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Earliest sample day; default any",
+              "title": "From"
+            },
+            "description": "Earliest sample day; default any"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Latest sample day; default any",
+              "title": "To"
+            },
+            "description": "Latest sample day; default any"
+          },
+          {
+            "name": "analyte",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "vitamin_d_25oh",
+                      "vitamin_b12",
+                      "folate",
+                      "ferritin",
+                      "iron",
+                      "transferrin_saturation",
+                      "hemoglobin",
+                      "magnesium",
+                      "calcium",
+                      "potassium",
+                      "sodium",
+                      "zinc",
+                      "selenium",
+                      "cholesterol_total",
+                      "ldl_cholesterol",
+                      "hdl_cholesterol",
+                      "triglycerides",
+                      "glucose",
+                      "hba1c",
+                      "tsh"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only these known analytes; repeat for more",
+              "title": "Analyte"
+            },
+            "description": "Only these known analytes; repeat for more"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LabResultsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/lab-results/reports/{report_id}": {
+      "delete": {
+        "tags": [
+          "lab results"
+        ],
+        "summary": "Remove Lab Report",
+        "description": "Delete one of the user's lab reports with all of its results.",
+        "operationId": "deleteLabReport",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/lab-results/{result_id}": {
+      "delete": {
+        "tags": [
+          "lab results"
+        ],
+        "summary": "Remove Lab Result",
+        "description": "Delete one result of a lab report.",
+        "operationId": "deleteLabResult",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "result_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Result Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/integration-status": {
       "get": {
         "tags": [
@@ -2136,7 +2400,7 @@
           "account"
         ],
         "summary": "Import Data",
-        "description": "Import a HealthyEating export: its meals, weigh-ins and day marks.\n\nEntries this account already has are skipped, so importing the same file again changes\nnothing. The account, settings and connections stay as they are. Rules:\nservices/data_import.py.",
+        "description": "Import a HealthyEating export: its meals, weigh-ins, lab results and day marks.\n\nEntries this account already has are skipped, so importing the same file again changes\nnothing. The account, settings and connections stay as they are. Rules:\nservices/data_import.py.",
         "operationId": "importData",
         "security": [
           {
@@ -2357,6 +2621,48 @@
           "external_ids"
         ],
         "title": "AppleHealthDeletions"
+      },
+      "CanonicalValueResponse": {
+        "properties": {
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "reference_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Low"
+          },
+          "reference_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference High"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "unit",
+          "reference_low",
+          "reference_high"
+        ],
+        "title": "CanonicalValueResponse"
       },
       "ConnectionResponse": {
         "properties": {
@@ -3003,6 +3309,9 @@
           "weights": {
             "$ref": "#/components/schemas/ImportCounts"
           },
+          "lab_results": {
+            "$ref": "#/components/schemas/ImportCounts"
+          },
           "days_marked": {
             "type": "integer",
             "title": "Days Marked",
@@ -3055,6 +3364,7 @@
           "exported_at",
           "meals",
           "weights",
+          "lab_results",
           "days_marked",
           "first_day",
           "last_day",
@@ -3182,6 +3492,226 @@
           "arrival_status"
         ],
         "title": "IntegrationStatusResponse"
+      },
+      "LabReportResponse": {
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Report Id"
+          },
+          "taken_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Taken On",
+            "description": "The day the sample was taken"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/LabResultResponse"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "In the order of the report"
+          }
+        },
+        "type": "object",
+        "required": [
+          "report_id",
+          "taken_on",
+          "results"
+        ],
+        "title": "LabReportResponse"
+      },
+      "LabResultResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "As printed on the report"
+          },
+          "analyte": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "vitamin_d_25oh",
+                  "vitamin_b12",
+                  "folate",
+                  "ferritin",
+                  "iron",
+                  "transferrin_saturation",
+                  "hemoglobin",
+                  "magnesium",
+                  "calcium",
+                  "potassium",
+                  "sodium",
+                  "zinc",
+                  "selenium",
+                  "cholesterol_total",
+                  "ldl_cholesterol",
+                  "hdl_cholesterol",
+                  "triglycerides",
+                  "glucose",
+                  "hba1c",
+                  "tsh"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analyte",
+            "description": "The known analyte; null for any other"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value",
+            "description": "As printed"
+          },
+          "comparator": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "<",
+                  ">"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comparator",
+            "description": "'<' or '>' when the value was printed with one"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit",
+            "description": "As printed"
+          },
+          "reference_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Low",
+            "description": "The lab's range as printed, in `unit`"
+          },
+          "reference_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference High"
+          },
+          "canonical": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CanonicalValueResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "In the analyte's canonical unit; null for other analytes or units"
+          },
+          "related_nutrient": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "vitamin_a_ug",
+                  "vitamin_c_mg",
+                  "vitamin_d_ug",
+                  "vitamin_e_mg",
+                  "vitamin_k_ug",
+                  "thiamin_mg",
+                  "riboflavin_mg",
+                  "niacin_mg",
+                  "vitamin_b6_mg",
+                  "folate_ug",
+                  "vitamin_b12_ug",
+                  "calcium_mg",
+                  "iron_mg",
+                  "magnesium_mg",
+                  "phosphorus_mg",
+                  "potassium_mg",
+                  "zinc_mg",
+                  "selenium_ug"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Nutrient",
+            "description": "The vitamin or mineral this analyte relates to, where there is one"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "analyte",
+          "value",
+          "comparator",
+          "unit",
+          "reference_low",
+          "reference_high",
+          "canonical",
+          "related_nutrient",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "LabResultResponse"
+      },
+      "LabResultsResponse": {
+        "properties": {
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/LabReportResponse"
+            },
+            "type": "array",
+            "title": "Reports",
+            "description": "Newest sample first"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reports"
+        ],
+        "title": "LabResultsResponse"
       },
       "LabelItemResponse": {
         "properties": {
@@ -4427,14 +4957,15 @@
             "type": "string",
             "enum": [
               "meal",
-              "weight"
+              "weight",
+              "lab_result"
             ],
             "title": "Kind"
           },
           "index": {
             "type": "integer",
             "title": "Index",
-            "description": "Position among the file's meals or weigh-ins, from 0"
+            "description": "Position among the file's meals, weigh-ins or lab results, from 0"
           },
           "reason": {
             "type": "string",

@@ -2,19 +2,23 @@
 
 The counterpart of services/export.py (healthy-eating-backend#27, owner decision 2026-10-26):
 it moves a history between servers or accounts, from the JSON file or the ZIP of CSV files.
-Only the history is imported: meals with their items, weigh-ins and the marks of their days.
+Only the history is imported: meals with their items, weigh-ins, lab results and the marks of
+the meals' days.
 The account, logins, settings and connections stay as they are on this server.
 
 Meals keep everything the export has: their values, provenance, times with their offsets,
 `imported_from` (empty for meals that were logged as they were eaten, so they still count as
-usual meals) and their items. Vitamins and minerals are computed again from the items. Each
-meal and weigh-in keeps its id unless another account here already uses it.
+usual meals) and their items. Vitamins and minerals are computed again from the items, and the
+canonical values of lab results from their analyte and unit. Each meal, weigh-in and lab result
+keeps its id unless another account here already uses it; lab results keep their report.
 
 Nothing is counted twice:
 - a meal whose id this account already has, or with the same name (case and spacing ignored),
   minute and calories as a stored meal, is skipped;
 - a weigh-in whose id or Apple Health sample this account already has, or with the same time
-  and weight, is skipped.
+  and weight, is skipped;
+- a lab result whose id this account already has, or with the same sample day, name (case and
+  spacing ignored), value and unit, is skipped.
 
 Days that get meals are marked like services/days.py:mark_imported_days describes: the
 export's own mark when it has one; otherwise complete, unless the exported account counted
@@ -32,13 +36,14 @@ import zipfile
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import AwareDatetime, BaseModel, Field, ValidationError
+from pydantic import AwareDatetime, BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from healthy_eating.db.models import Meal, User, WeightEntry
+from healthy_eating.db.models import LabResult, Meal, User, WeightEntry
+from healthy_eating.nutrition.lab_analytes import LabAnalyte, LabComparator
 from healthy_eating.nutrition.micronutrients import MICRONUTRIENTS, ItemMatchStatus
 from healthy_eating.nutrition.types import (
     Confidence,
@@ -51,6 +56,13 @@ from healthy_eating.nutrition.types import (
 from healthy_eating.services.days import mark_imported_days
 from healthy_eating.services.export import FORMAT_VERSION
 from healthy_eating.services.food_matching import FoodItem, SearchCache
+from healthy_eating.services.lab_results import (
+    EARLIEST_SAMPLE,
+    MAX_NAME_LENGTH,
+    MAX_UNIT_LENGTH,
+    MAX_VALUE,
+    set_canonical,
+)
 from healthy_eating.services.local_time import local_eaten_at
 from healthy_eating.services.meal_import import FUTURE_TOLERANCE, MAX_IMPORTED_FROM_LENGTH
 from healthy_eating.services.meals import (
@@ -76,7 +88,7 @@ MAX_LABEL_VALUE = 100_000
 ID_BATCH = 1000
 
 ImportFormat = Literal["json", "csv"]
-EntryKind = Literal["meal", "weight"]
+EntryKind = Literal["meal", "weight", "lab_result"]
 
 
 class UnsupportedFileError(ValueError):
@@ -90,6 +102,7 @@ class ExportFile:
     meals: list[dict[str, Any]]
     weights: list[dict[str, Any]]
     day_statuses: list[dict[str, Any]]
+    lab_results: list[dict[str, Any]] = field(default_factory=list)
 
 
 class ExportedItem(BaseModel):
@@ -136,6 +149,31 @@ class ExportedWeight(BaseModel):
     created_at: AwareDatetime | None = None
 
 
+LabNumber = Annotated[float, Field(ge=-MAX_VALUE, le=MAX_VALUE, allow_inf_nan=False)]
+
+
+class ExportedLabResult(BaseModel):
+    result_id: uuid.UUID | None = None
+    report_id: uuid.UUID | None = None
+    taken_on: date = Field(ge=EARLIEST_SAMPLE)
+    position: int = Field(default=0, ge=0)
+    name: str = Field(min_length=1, max_length=MAX_NAME_LENGTH)
+    analyte: LabAnalyte | None = None
+    value: LabNumber
+    comparator: LabComparator | None = None
+    unit: str | None = Field(default=None, max_length=MAX_UNIT_LENGTH)
+    reference_low: LabNumber | None = None
+    reference_high: LabNumber | None = None
+    created_at: AwareDatetime | None = None
+
+    @model_validator(mode="after")
+    def _range(self) -> Self:
+        low, high = self.reference_low, self.reference_high
+        if low is not None and high is not None and low > high:
+            raise ValueError("reference_low is above reference_high")
+        return self
+
+
 class ExportedDayStatus(BaseModel):
     date: date
     status: DayStatus
@@ -159,6 +197,8 @@ class DataImportResult:
     meals_duplicate: int = 0
     weights_imported: int = 0
     weights_duplicate: int = 0
+    lab_results_imported: int = 0
+    lab_results_duplicate: int = 0
     days_marked: int = 0
     first_day: date | None = None
     last_day: date | None = None
@@ -204,6 +244,7 @@ def _read_json(data: bytes) -> ExportFile:
         meals=_list(document.get("meals")),
         weights=_list(document.get("weights")),
         day_statuses=_list(document.get("day_statuses")),
+        lab_results=_list(document.get("lab_results")),
     )
 
 
@@ -264,6 +305,7 @@ def _read_zip(data: bytes) -> ExportFile:
                 raise UnsupportedFileError("This is not a HealthyEating export")
             weights = _unpack(archive, "weights.csv", budget)
             statuses = _unpack(archive, "day_statuses.csv", budget)
+            lab_results = _unpack(archive, "lab_results.csv", budget)
         except (zipfile.BadZipFile, NotImplementedError, EOFError) as error:
             raise UnsupportedFileError("The ZIP file cannot be read") from error
     try:
@@ -279,6 +321,7 @@ def _read_zip(data: bytes) -> ExportFile:
         meals=_csv_rows(meals),
         weights=_csv_rows(weights),
         day_statuses=_csv_rows(statuses),
+        lab_results=_csv_rows(lab_results),
     )
 
 
@@ -308,6 +351,10 @@ def _weight_key(measured_at: datetime, weight_kg: float) -> tuple[datetime, floa
     return measured_at.replace(microsecond=0), round(weight_kg, 2)
 
 
+def _lab_key(taken_on: date, name: str, value: float, unit: str | None) -> tuple[Any, ...]:
+    return taken_on, dish_key(name), round(value, 6), dish_key(unit or "")
+
+
 def _food_item(item: ExportedItem) -> FoodItem:
     if item.status == "label":
         given = item.label_values or {}
@@ -324,7 +371,9 @@ def _batches(values: list[uuid.UUID]) -> Iterable[list[uuid.UUID]]:
 
 
 async def _owners(
-    session: AsyncSession, model: type[Meal] | type[WeightEntry], ids: list[uuid.UUID]
+    session: AsyncSession,
+    model: type[Meal] | type[WeightEntry] | type[LabResult],
+    ids: list[uuid.UUID],
 ) -> dict[uuid.UUID, uuid.UUID]:
     """The account each of these ids already belongs to, for those in use."""
     owners: dict[uuid.UUID, uuid.UUID] = {}
@@ -491,6 +540,78 @@ async def _import_weights(
     return imported, duplicates
 
 
+async def _import_lab_results(
+    session: AsyncSession,
+    user: User,
+    rows: list[dict[str, Any]],
+    rejected: list[RejectedEntry],
+    now: datetime,
+) -> tuple[int, int]:
+    results = []
+    for index, result in _validated(ExportedLabResult, rows, "lab_result", rejected):
+        if result.taken_on > (now + FUTURE_TOLERANCE).date() + timedelta(days=1):
+            rejected.append(RejectedEntry("lab_result", index, "taken_on is in the future"))
+        else:
+            results.append(result)
+    if not results:
+        return 0, 0
+
+    owners = await _owners(
+        session, LabResult, [r.result_id for r in results if r.result_id is not None]
+    )
+    stored = await session.execute(
+        select(LabResult.taken_on, LabResult.name, LabResult.value, LabResult.unit).where(
+            LabResult.user_id == user.id
+        )
+    )
+    seen = {_lab_key(*row) for row in stored}
+    seen_ids: set[uuid.UUID] = set()
+    # Results exported without a report share one new report per sample day.
+    new_reports: dict[date, uuid.UUID] = {}
+
+    imported = duplicates = 0
+    for result in results:
+        name = " ".join(result.name.split())
+        unit = " ".join(result.unit.split()) if result.unit else None
+        key = _lab_key(result.taken_on, name, result.value, unit)
+        ours = result.result_id is not None and (
+            owners.get(result.result_id) == user.id or result.result_id in seen_ids
+        )
+        if ours or key in seen:
+            duplicates += 1
+            continue
+        seen.add(key)
+        result_id = (
+            result.result_id
+            if result.result_id is not None and result.result_id not in owners
+            else None
+        )
+        if result_id is not None:
+            seen_ids.add(result_id)
+        report_id = result.report_id or new_reports.setdefault(result.taken_on, uuid.uuid4())
+        row = LabResult(
+            id=result_id or uuid.uuid4(),
+            user_id=user.id,
+            report_id=report_id,
+            position=result.position,
+            taken_on=result.taken_on,
+            name=name,
+            analyte=result.analyte,
+            value=result.value,
+            comparator=result.comparator,
+            unit=unit,
+            reference_low=result.reference_low,
+            reference_high=result.reference_high,
+        )
+        set_canonical(row)
+        if result.created_at is not None:
+            row.created_at = result.created_at
+        session.add(row)
+        imported += 1
+    await session.flush()
+    return imported, duplicates
+
+
 def _day_marks(
     rows: list[dict[str, Any]], days: set[date]
 ) -> dict[date, tuple[DayStatus, StatusSetter]]:
@@ -527,6 +648,9 @@ async def import_export(
     weights_imported, weights_duplicate = await _import_weights(
         session, user, export.weights, rejected
     )
+    lab_results_imported, lab_results_duplicate = await _import_lab_results(
+        session, user, export.lab_results, rejected, now
+    )
     days_marked = await mark_imported_days(session, user_id, _day_marks(export.day_statuses, days))
     return DataImportResult(
         format=export.format,
@@ -535,6 +659,8 @@ async def import_export(
         meals_duplicate=meals_duplicate,
         weights_imported=weights_imported,
         weights_duplicate=weights_duplicate,
+        lab_results_imported=lab_results_imported,
+        lab_results_duplicate=lab_results_duplicate,
         days_marked=days_marked,
         first_day=min(days, default=None),
         last_day=max(days, default=None),

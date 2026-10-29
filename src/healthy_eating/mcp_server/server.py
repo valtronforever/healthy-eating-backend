@@ -9,6 +9,7 @@ from healthy_eating.mcp_server.tools import (
     history,
     importing,
     insights,
+    lab_results,
     meals,
     profile,
     usual,
@@ -27,7 +28,8 @@ reuse numbers that were already calculated as they are and estimate the missing 
 your best estimate right away, even when something is unclear; ask about it as a short
 follow-up after your normal answer and update the same meal if the answer changes it.
 After every tool call that changes data (`log_meal`, `relog_meal`, `import_meals`,
-`delete_meal`, `set_day_status`, `set_timezone`, `set_targets`, `log_weight`, `delete_weight`),
+`delete_meal`, `set_day_status`, `set_timezone`, `set_targets`, `log_weight`, `delete_weight`,
+`log_lab_results`, `delete_lab_results`),
 tell the user in one short line whether the change reached HealthyEating, naming HealthyEating
 (the tool's `user_message` says it).
 When the user says they ate exactly the same as before ("same breakfast as yesterday", "my
@@ -52,6 +54,9 @@ When the user tells you their body weight or asks to update or record it, in any
 save it with `log_weight` in the unit they gave, also when you keep it in your own memory.
 Never ask for their weight, and never comment on a weight change: no praise, no warning, no
 advice about losing or gaining.
+When the user shares lab results (a blood test report as a photo, a PDF or text), save them
+with `log_lab_results`: only the values as printed, never their name, birth date, doctor or lab.
+Do not interpret the results for HealthyEating, and never suggest goals from them.
 All nutrient values use canonical units: energy in kcal, macronutrients in g, minerals
 in mg, trace elements and most vitamins in µg.
 The user can review statistics and progress in the Healthy Eating iOS app by signing
@@ -68,6 +73,7 @@ def create_mcp_server(provider: PostgresOAuthProvider, db: Database) -> FastMCP:
     history.register(mcp, db)
     insights.register(mcp, db)
     weights.register(mcp, db)
+    lab_results.register(mcp, db)
     usual.register(mcp, db)
     importing.register(mcp, db)
     foods.register(mcp, db)

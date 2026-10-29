@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from healthy_eating.db import Database
 from healthy_eating.services.days import counts_complete_days_only
+from tests.test_export import LAB_REPORT
 from tests.test_meal_import import HISTORY, import_history, meals_between
 from tests.test_meal_items import call
 from tests.test_meals_api import Account, account
@@ -39,11 +40,13 @@ DINNER: dict[str, Any] = {
 
 
 async def history_account(app: FastAPI, http: httpx.AsyncClient, email: str) -> Account:
-    """An account with two meals (one with items), two weigh-ins and a complete day."""
+    """An account with two meals (one with items), two weigh-ins, a lab report of two results and
+    a complete day."""
     owner = await account(http, email, "Europe/Berlin")
     await call(app, owner, "log_meal", LUNCH)
     await call(app, owner, "log_meal", DINNER)
     await call(app, owner, "log_weight", {"weight": 70.2, "measured_at": "2026-10-20T07:00:00"})
+    await call(app, owner, "log_lab_results", LAB_REPORT)
     await http.post(
         "/api/v1/weights",
         json={
@@ -108,6 +111,7 @@ async def test_an_export_moves_to_another_account_unchanged(
     assert result["format"] == format
     assert result["meals"] == {"imported": 2, "skipped_duplicates": 0}
     assert result["weights"] == {"imported": 2, "skipped_duplicates": 0}
+    assert result["lab_results"] == {"imported": 2, "skipped_duplicates": 0}
     assert (result["first_day"], result["last_day"]) == ("2026-10-20", "2026-10-21")
     assert result["rejected_count"] == 0
     before = await meals_between(http, source, "2026-10-20", "2026-10-21")
@@ -125,6 +129,17 @@ async def test_an_export_moves_to_another_account_unchanged(
     assert sorted(w["weight_kg"] for w in weights["entries"]) == [70.0, 70.2]
     settings = (await http.get("/api/v1/me/settings", headers=target.headers)).json()
     assert settings["weight_tracking"] is True
+    labs = (await http.get("/api/v1/lab-results", headers=target.headers)).json()["reports"]
+    before_labs = (await http.get("/api/v1/lab-results", headers=source.headers)).json()["reports"]
+    assert len(labs) == 1
+    assert [
+        (r["name"], r["value"], r["unit"], r["comparator"], r["canonical"])
+        for r in labs[0]["results"]
+    ] == [
+        (r["name"], r["value"], r["unit"], r["comparator"], r["canonical"])
+        for r in before_labs[0]["results"]
+    ]
+    assert labs[0]["taken_on"] == "2026-10-15"
 
 
 async def test_importing_the_same_export_again_changes_nothing(
@@ -137,6 +152,7 @@ async def test_importing_the_same_export_again_changes_nothing(
 
     assert result["meals"] == {"imported": 0, "skipped_duplicates": 2}
     assert result["weights"] == {"imported": 0, "skipped_duplicates": 2}
+    assert result["lab_results"] == {"imported": 0, "skipped_duplicates": 2}
     assert result["days_marked"] == 0
     assert len(await meals_between(http, owner, "2026-10-20", "2026-10-21")) == 2
 

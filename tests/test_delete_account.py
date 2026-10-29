@@ -55,6 +55,10 @@ async def account(app: FastAPI, http: httpx.AsyncClient) -> dict[str, Any]:
     await http.put("/api/v1/days/2026-10-18/status", json={"status": "complete"}, headers=headers)
     async with mcp_client(app, claude_tokens["access_token"]) as mcp:
         await mcp.call_tool("log_meal", MEAL)
+        await mcp.call_tool(
+            "log_lab_results",
+            {"taken_on": "2026-10-15", "results": [{"name": "Ferritin", "value": 22}]},
+        )
     me = (await http.get("/api/v1/me", headers=headers)).json()
     return {
         "user_id": uuid.UUID(me["id"]),
@@ -69,7 +73,8 @@ async def test_deleting_the_account_removes_everything(
 ) -> None:
     before = await rows_of(app, account["user_id"])
     assert all(
-        before[name] > 0 for name in ("users", "identities", "meals", "day_statuses", "grants")
+        before[name] > 0
+        for name in ("users", "identities", "meals", "day_statuses", "grants", "lab_results")
     )
     other_client = await register_client(http)
     other = await sign_in(http, other_client, email="omar@example.com")

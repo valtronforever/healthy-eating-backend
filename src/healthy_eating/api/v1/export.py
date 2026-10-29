@@ -71,8 +71,10 @@ class ImportCounts(BaseModel):
 
 
 class RejectedImportEntry(BaseModel):
-    kind: Literal["meal", "weight"]
-    index: int = Field(description="Position among the file's meals or weigh-ins, from 0")
+    kind: Literal["meal", "weight", "lab_result"]
+    index: int = Field(
+        description="Position among the file's meals, weigh-ins or lab results, from 0"
+    )
     reason: str
 
 
@@ -82,6 +84,7 @@ class ImportResponse(BaseModel):
     exported_at: datetime | None = Field(description="When the export was made, if it says")
     meals: ImportCounts
     weights: ImportCounts
+    lab_results: ImportCounts
     days_marked: int = Field(
         description="Days with imported meals that got a complete or partial mark"
     )
@@ -130,7 +133,7 @@ async def import_data(
         bool, Query(description="Check the file and count what would be imported; store nothing")
     ] = False,
 ) -> ImportResponse:
-    """Import a HealthyEating export: its meals, weigh-ins and day marks.
+    """Import a HealthyEating export: its meals, weigh-ins, lab results and day marks.
 
     Entries this account already has are skipped, so importing the same file again changes
     nothing. The account, settings and connections stay as they are. Rules:
@@ -156,6 +159,10 @@ async def import_data(
         ),
         weights=ImportCounts(
             imported=result.weights_imported, skipped_duplicates=result.weights_duplicate
+        ),
+        lab_results=ImportCounts(
+            imported=result.lab_results_imported,
+            skipped_duplicates=result.lab_results_duplicate,
         ),
         days_marked=result.days_marked,
         first_day=result.first_day,

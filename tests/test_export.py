@@ -12,7 +12,13 @@ from fastapi import FastAPI
 
 from healthy_eating.db import Database
 from healthy_eating.db.models import Meal
-from healthy_eating.services.export import MEAL_BATCH, MEAL_COLUMNS, export_csv_zip, export_json
+from healthy_eating.services.export import (
+    LAB_RESULT_COLUMNS,
+    MEAL_BATCH,
+    MEAL_COLUMNS,
+    export_csv_zip,
+    export_json,
+)
 from tests.mcp_helpers import mcp_client
 from tests.oauth_helpers import bearer, register_client, sign_in
 
@@ -26,6 +32,14 @@ MEAL: dict[str, Any] = {
     "carbohydrates_g": 36,
     "estimated_fields": ["protein_g", "fat_g"],
     "eaten_at": "2026-10-18T13:00:00+02:00",
+}
+
+LAB_REPORT: dict[str, Any] = {
+    "taken_on": "2026-10-15",
+    "results": [
+        {"name": "Ferritin", "analyte": "ferritin", "value": 22, "unit": "ng/mL"},
+        {"name": "CRP", "value": 0.5, "unit": "mg/dL", "comparator": "<"},
+    ],
 }
 
 
@@ -44,6 +58,7 @@ async def account(app: FastAPI, http: httpx.AsyncClient) -> dict[str, Any]:
     await http.put("/api/v1/days/2026-10-18/status", json={"status": "complete"}, headers=headers)
     async with mcp_client(app, claude_tokens["access_token"]) as mcp:
         await mcp.call_tool("log_meal", MEAL)
+        await mcp.call_tool("log_lab_results", LAB_REPORT)
     me = (await http.get("/api/v1/me", headers=headers)).json()
     return {"headers": headers, "user_id": uuid.UUID(me["id"])}
 
@@ -85,6 +100,17 @@ async def test_json_export_contains_all_data(
     assert meal["estimated_fields"] == ["protein_g", "fat_g"]
     assert meal["source_note"] == "Google Sheets log"
     assert meal["client_name"] == "Claude"
+    ferritin, crp = data["lab_results"]
+    assert set(ferritin) == set(LAB_RESULT_COLUMNS)
+    assert ferritin["report_id"] == crp["report_id"]
+    assert (ferritin["taken_on"], ferritin["name"], ferritin["value"]) == (
+        "2026-10-15",
+        "Ferritin",
+        22,
+    )
+    assert (ferritin["canonical_value"], ferritin["canonical_unit"]) == (22, "µg/L")
+    assert (crp["analyte"], crp["comparator"], crp["canonical_value"]) == (None, "<", None)
+    assert ferritin["client_name"] == "Claude"
     assert "token" not in response.text.lower()
 
 
@@ -102,6 +128,7 @@ async def test_csv_export_is_a_zip_of_tables(
         "account.json",
         "connections.csv",
         "day_statuses.csv",
+        "lab_results.csv",
         "logins.csv",
         "meals.csv",
         "settings.csv",
@@ -122,6 +149,10 @@ async def test_csv_export_is_a_zip_of_tables(
     assert settings["target_protein_g_min"] == "90.0"
     assert settings["target_protein_g_max"] == ""
     assert table("day_statuses.csv")[0]["status"] == "complete"
+    assert [(r["name"], r["comparator"]) for r in table("lab_results.csv")] == [
+        ("Ferritin", ""),
+        ("CRP", "<"),
+    ]
     assert len(table("connections.csv")) == 2
     assert json.loads(archive.read("account.json"))["account"]["email"] == "nina@example.com"
 
@@ -175,6 +206,7 @@ async def test_export_only_contains_the_users_data(
     data = (await http.get("/api/v1/export", headers=bearer(other["access_token"]))).json()
     assert data["meals"] == []
     assert data["day_statuses"] == []
+    assert data["lab_results"] == []
     assert data["account"]["email"] == "omar@example.com"
     assert len(data["connections"]) == 1
 

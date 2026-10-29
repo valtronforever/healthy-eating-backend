@@ -15,6 +15,7 @@ from evals.environment import FIXTURES_DIR, EvalEnvironment, Turn
 from evals.personas import CALORIE_PROJECT, CHAT, CHAT_WITH_MEMORY
 from healthy_eating.db.base import utcnow
 from healthy_eating.db.models import Meal
+from healthy_eating.nutrition.lab_analytes import unit_key
 from healthy_eating.nutrition.types import NUTRIENT_FIELDS, OPTIONAL_NUTRIENT_FIELDS
 from healthy_eating.services.settings import SettingsChanges, TargetRange
 
@@ -496,6 +497,8 @@ WRITE_TOOLS = frozenset(
         "set_targets",
         "log_weight",
         "delete_weight",
+        "log_lab_results",
+        "delete_lab_results",
     }
 )
 ADVICE = re.compile(
@@ -595,6 +598,77 @@ async def weight_logged(env: EvalEnvironment, checks: Checks, turns: list[Turn])
         bool(calls) and calls[-1].arguments.get("measured_at") is not None,
         str([c.arguments for c in calls]),
     )
+
+
+LAB_REPORT_TEXT = """\
+Here are my blood test results, please save them.
+
+Labor Dr. Weber, Hauptstrasse 5, 10115 Berlin
+Patient: Anna Schmidt, born 02.04.1990
+Sample taken: 20.10.2026
+
+25-OH-Vitamin D   18 ng/ml      (30 - 100)
+Ferritin          22 µg/l       (15 - 150)
+Hämoglobin        13,1 g/dl     (12,0 - 16,0)
+CRP               <0,5 mg/dl    (< 0,5)
+"""
+PERSONAL_DETAILS = ("anna", "schmidt", "1990", "weber", "hauptstr", "10115")
+# Reading a value instead of saving it: the assistant never interprets lab results.
+INTERPRETATION = re.compile(
+    r"\b(low|deficien\w*|insufficien\w*|too (low|high)|normal|concerning)\b",
+    re.IGNORECASE,
+)
+GOALS_NOTE = re.compile(r"update (your )?goals", re.IGNORECASE)
+
+
+async def lab_report(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
+    turn = await env.chat(CHAT.name, LAB_REPORT_TEXT)
+    turns.append(turn)
+    if not _require_turn_ok(checks, turn, "reply"):
+        return
+    results = await env.lab_results()
+    stored = [
+        (r.name, r.analyte, r.value, r.comparator, unit_key(r.unit or ""), str(r.taken_on))
+        for r in results
+    ]
+    checks.require("one report", len({r.report_id for r in results}) == 1, str(stored))
+    checks.require(
+        "four results as printed, known analytes named",
+        sorted(
+            (analyte or "", value, comparator or "", unit)
+            for _, analyte, value, comparator, unit, _ in stored
+        )
+        == sorted(
+            [
+                ("vitamin_d_25oh", 18, "", "ng/ml"),
+                ("ferritin", 22, "", "ug/l"),
+                ("hemoglobin", 13.1, "", "g/dl"),
+                ("", 0.5, "<", "mg/dl"),
+            ]
+        ),
+        str(stored),
+    )
+    checks.require("sample day 2026-10-20", {r[-1] for r in stored} == {"2026-10-20"}, str(stored))
+    assert env.proxy is not None
+    sent = str([call.arguments for call in env.proxy.tool_calls("log_lab_results")]).casefold()
+    checks.require(
+        "no personal details sent",
+        not any(detail in sent for detail in PERSONAL_DETAILS),
+        sent[:400],
+    )
+    checks.require("no goals changed", not await env.micronutrient_goals(), "")
+    others = [c.name for c in env.proxy.calls if c.name in WRITE_TOOLS - {"log_lab_results"}]
+    checks.require("nothing else changed", not others, str(others))
+    checks.require("user told it was saved", confirms_saved(turn.reply), turn.reply[-400:])
+    checks.require(
+        "says goals can be updated", bool(GOALS_NOTE.search(turn.reply)), turn.reply[-400:]
+    )
+    checks.require(
+        "no interpretation of the values",
+        not INTERPRETATION.search(turn.reply),
+        turn.reply[-400:],
+    )
+    checks.require("no advice", not ADVICE.search(turn.reply), turn.reply[-400:])
 
 
 async def weight_in_pounds(env: EvalEnvironment, checks: Checks, turns: list[Turn]) -> None:
@@ -980,6 +1054,11 @@ SCENARIOS = [
         "weight_update_request",
         "Short Ukrainian request to update the weight, chat with memory: one weigh-in saved",
         weight_update_request,
+    ),
+    Scenario(
+        "lab_report",
+        "A lab report in text: values saved as printed, no personal details, no interpretation",
+        lab_report,
     ),
     Scenario(
         "what_did_i_eat",

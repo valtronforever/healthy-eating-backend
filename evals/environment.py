@@ -42,6 +42,7 @@ from healthy_eating.db.base import utcnow
 from healthy_eating.db.models import (
     AccessTokenRecord,
     DayStatusRecord,
+    LabResult,
     Meal,
     OAuthClient,
     User,
@@ -174,6 +175,7 @@ class EvalEnvironment:
         async with self.db.session() as session:
             await session.execute(text("DELETE FROM meals"))
             await session.execute(text("DELETE FROM weights"))
+            await session.execute(text("DELETE FROM lab_results"))
             await session.execute(text("UPDATE users SET timezone = NULL"))
             await session.execute(
                 update(User).values(
@@ -255,6 +257,13 @@ class EvalEnvironment:
     async def weights(self) -> list[WeightEntry]:
         async with self.db.session() as session:
             rows = await session.scalars(select(WeightEntry).order_by(WeightEntry.created_at))
+            return list(rows)
+
+    async def lab_results(self) -> list[LabResult]:
+        async with self.db.session() as session:
+            rows = await session.scalars(
+                select(LabResult).order_by(LabResult.created_at, LabResult.position)
+            )
             return list(rows)
 
     async def time_zone(self) -> str | None:

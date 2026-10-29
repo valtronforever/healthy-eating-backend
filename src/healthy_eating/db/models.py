@@ -20,6 +20,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from healthy_eating.db.base import Base, TimestampMixin
+from healthy_eating.nutrition.lab_analytes import LAB_ANALYTES, LAB_COMPARATORS
 from healthy_eating.nutrition.micronutrients import (
     ITEM_MATCH_STATUSES,
     REFERENCE_DATASETS,
@@ -367,6 +368,52 @@ class WeightEntry(TimestampMixin, Base):
     utc_offset_minutes: Mapped[int | None]
     source: Mapped[str] = mapped_column(String(16))
     external_id: Mapped[str | None] = mapped_column(String(255))
+
+
+class LabResult(TimestampMixin, Base):
+    """One value from a lab report, as printed (see nutrition/lab_analytes.py).
+
+    The results of one report share `report_id`; correcting a report replaces all of its rows.
+    `canonical_*` are set only for a known analyte in a unit that converts.
+    """
+
+    __tablename__ = "lab_results"
+    __table_args__ = (
+        CheckConstraint(f"analyte IS NULL OR {_one_of('analyte', LAB_ANALYTES)}", name="analyte"),
+        CheckConstraint(
+            f"comparator IS NULL OR {_one_of('comparator', LAB_COMPARATORS)}", name="comparator"
+        ),
+        CheckConstraint(
+            "reference_low IS NULL OR reference_high IS NULL OR reference_low <= reference_high",
+            name="reference_range",
+        ),
+        Index("ix_lab_results_user_id_taken_on", "user_id", "taken_on"),
+        Index("ix_lab_results_user_id_report_id", "user_id", "report_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    report_id: Mapped[uuid.UUID]
+    # Order on the report.
+    position: Mapped[int]
+    # The day the sample was taken.
+    taken_on: Mapped[date]
+    name: Mapped[str] = mapped_column(String(100))
+    analyte: Mapped[str | None] = mapped_column(String(32))
+    value: Mapped[float]
+    comparator: Mapped[str | None] = mapped_column(String(1))
+    unit: Mapped[str | None] = mapped_column(String(30))
+    # The lab's own reference range as printed, in `unit`; either bound may be missing.
+    reference_low: Mapped[float | None]
+    reference_high: Mapped[float | None]
+    canonical_value: Mapped[float | None]
+    canonical_unit: Mapped[str | None] = mapped_column(String(16))
+    canonical_low: Mapped[float | None]
+    canonical_high: Mapped[float | None]
+    # The OAuth client (AI assistant) that saved the report.
+    client_id: Mapped[str | None] = mapped_column(
+        ForeignKey("oauth_clients.client_id", ondelete="SET NULL")
+    )
 
 
 class WidgetToken(Base):

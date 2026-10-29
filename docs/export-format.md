@@ -41,6 +41,7 @@ their meaning.
  "day_statuses": [{"date": "2026-10-18", "status": "complete", "set_by": "user",
                    "updated_at": "…"}],
  "weights": [{"weight_id": "…", "weight_kg": 78.4, "…": "…"}],
+ "lab_results": [{"result_id": "…", "report_id": "…", "taken_on": "2026-10-20", "…": "…"}],
  "meals": [{"meal_id": "…", "dish_name": "…", "…": "…"}]
 }
 ```
@@ -54,6 +55,14 @@ their meaning.
   `measured_at_local`, `local_date`, `utc_offset_minutes`, `source` (`app`, `assistant` or
   `apple_health`), `external_id` (the Apple Health sample id, only for `apple_health`),
   `created_at`, `updated_at`. Present even when weight tracking is off.
+- `lab_results`: values from lab reports the user shared in the chat, oldest sample first, in
+  the order of each report: `result_id`, `report_id` (shared by the results of one report),
+  `taken_on` (the sample day), `position` (on the report), `name`, `value`, `comparator` (`<` or
+  `>` when the value was printed with one), `unit`, `reference_low` and `reference_high` (the
+  lab's range), all as printed; `analyte` (a known one such as `vitamin_d_25oh` or `ferritin`,
+  null otherwise) and `canonical_value`, `canonical_unit`, `canonical_low`, `canonical_high`
+  (the value and range in the analyte's canonical unit, null when it is not known or the unit
+  does not convert); `client_name`, `created_at`, `updated_at`.
 - `meals`: oldest first, with the fields below.
 
 ## Meal fields
@@ -87,6 +96,7 @@ their meaning.
 | `connections.csv` | `client_name, kind, created_at, last_used_at, revoked_at` |
 | `day_statuses.csv` | `date, status, set_by, from_import, updated_at` |
 | `weights.csv` | The weigh-in fields above, in that order |
+| `lab_results.csv` | The lab result fields above, in that order |
 | `meals.csv` | The meal fields above, in that order |
 
 CSV files are UTF-8 with a header row. Empty cells mean "not known" or "not set"; booleans are
@@ -100,23 +110,26 @@ for example to move to a self-hosted server. The request body is the export file
 50 MB; the format is recognized from the content. Format versions up to this server's are read.
 
 - **What is imported:** meals (all fields above, with their items; vitamins and minerals are
-  computed again from the items), weigh-ins and the marks of the days that get meals. The
-  account, logins, settings and connections stay as they are on the receiving server. Meals and
-  weigh-ins keep their ids unless another account on the server already uses them. Imported
-  weigh-ins turn weight tracking on.
+  computed again from the items), weigh-ins, lab results (canonical values computed again from
+  the analyte and unit) and the marks of the days that get meals. The account, logins, settings
+  and connections stay as they are on the receiving server. Meals, weigh-ins and lab results
+  keep their ids unless another account on the server already uses them; lab results keep their
+  `report_id`. Imported weigh-ins turn weight tracking on.
 - **Nothing twice:** a meal whose id the account already has, or with the same name (case and
   spacing ignored), minute and calories, is skipped; so is a weigh-in with a known id, Apple
-  Health sample or the same time and weight. Importing the same file again changes nothing.
+  Health sample or the same time and weight, and a lab result with a known id or the same sample
+  day, name, value and unit. Importing the same file again changes nothing.
 - **Day marks:** a day that gets meals takes the export's mark; without one it is marked
   complete, or partial when the exported account counted complete days only (its unmarked days
   did not count there). Such marks have `from_import` set: they let the day count but do not
   switch the account to counting complete days only. A day the account already marked keeps its
   mark.
-- **Invalid entries** (a missing or out-of-range value, an unknown source, a meal in the future)
+- **Invalid entries** (a missing or out-of-range value, an unknown source, a meal or lab sample
+  in the future)
   are left out; the answer counts them and names the first 50 with their position and reason.
 - `?dry_run=true` checks the file and returns the same answer without storing anything, so an
   app can show a preview first.
 
 The answer (`ImportResponse` in `openapi.json`) gives the file's format and export time, the
-imported and skipped meals and weigh-ins, the marked days and the first and last day of the
+imported and skipped meals, weigh-ins and lab results, the marked days and the first and last day of the
 imported meals. A file that is not an export is refused with 400, a larger one with 413.
