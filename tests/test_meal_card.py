@@ -77,6 +77,18 @@ async def test_meal_card_is_a_self_contained_mcp_app(mcp: Client[StreamableHttpT
     assert "innerHTML" not in html
 
 
+def test_meal_card_does_not_depend_on_one_host_channel() -> None:
+    html = card_html("meal_card.html")
+    # The standard MCP Apps result and ChatGPT's own globals both fill the card, because some
+    # ChatGPT clients deliver only one of them.
+    assert "ui/notifications/tool-result" in html
+    for name in ("window.openai", "toolOutput", "toolResponseMetadata", "openai:set_globals"):
+        assert name in html
+    # Without any result the card shows a static note, never a status that waits forever.
+    assert "Saving" not in html
+    assert 'class="fallback"' in html
+
+
 async def test_log_meal_card_has_the_day_so_far(
     http: httpx.AsyncClient, mcp: Client[StreamableHttpTransport], access_token: str
 ) -> None:

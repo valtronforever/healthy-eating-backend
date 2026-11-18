@@ -56,12 +56,19 @@ body { color: var(--he-ink); font-family: var(--he-font-sans); -webkit-font-smoo
 .plain-row { display: flex; justify-content: space-between; gap: var(--he-space-2); }
 .muted { color: var(--he-ink-muted); }
 [hidden] { display: none !important; }
+/* Shown only when no result reaches the card (some hosts never deliver it): fades in after a
+   moment so it does not flash before the result arrives, and works without the script. */
+.fallback { opacity: 0; animation: he-appear 0.2s ease-out 2.5s forwards; }
+.fallback .brand { display: flex; align-items: center; gap: var(--he-space-1); color: var(--he-accent); }
+@keyframes he-appear { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .fallback { animation-duration: 0s; } }
 </style>
 </head>
 <body>
 <main class="card" id="card" aria-live="polite">
-  <div class="status pending he-footnote" id="status">
-    <span id="status-text">Saving to Healthy Eating…</span>
+  <div class="fallback">
+    <div class="brand he-footnote">Healthy Eating</div>
+    <p class="note he-callout">Your assistant's reply says whether this meal was saved. Open the Healthy Eating app to see it with your day.</p>
   </div>
 </main>
 <script>
@@ -92,7 +99,7 @@ body { color: var(--he-ink); font-family: var(--he-font-sans); -webkit-font-smoo
   }
 
   window.addEventListener("message", (event) => {
-    if (event.source !== window.parent) return;
+    if (event.source !== window.parent && event.source !== null) return;
     const data = event.data;
     if (!data || data.jsonrpc !== "2.0") return;
     if (data.id !== undefined && !data.method) {
@@ -115,16 +122,36 @@ body { color: var(--he-ink); font-family: var(--he-font-sans); -webkit-font-smoo
   new ResizeObserver(() => {
     const rect = document.documentElement.getBoundingClientRect();
     notify("ui/notifications/size-changed", { width: Math.ceil(rect.width), height: Math.ceil(rect.height) });
+    try { window.openai && window.openai.notifyIntrinsicHeight && window.openai.notifyIntrinsicHeight(Math.ceil(rect.height)); } catch (_) {}
   }).observe(document.documentElement);
 
+  let initialized = false;
+  function announceInitialized() {
+    if (initialized) return;
+    initialized = true;
+    notify("ui/notifications/initialized");
+  }
   request("ui/initialize", {
     protocolVersion: PROTOCOL_VERSION,
     appInfo: { name: "Healthy Eating meal card", version: "1" },
     appCapabilities: {},
   }).then((result) => {
     applyHostContext(result && result.hostContext);
-    notify("ui/notifications/initialized");
-  }).catch(() => notify("ui/notifications/initialized"));
+    announceInitialized();
+  }).catch(announceInitialized);
+  // A host that never answers the handshake may still wait for this before sending the result.
+  setTimeout(announceInitialized, 1500);
+
+  // --- ChatGPT's own globals ------------------------------------------------------------
+  // ChatGPT also hands the result to the card as window.openai.toolOutput (structuredContent)
+  // and toolResponseMetadata (_meta). Some ChatGPT clients deliver only these, so read both.
+  function fromOpenAIGlobals() {
+    const openai = window.openai;
+    if (!openai) return;
+    applyHostContext({ theme: openai.theme, locale: openai.locale });
+    if (openai.toolOutput) render({ structuredContent: openai.toolOutput, _meta: openai.toolResponseMetadata || {} });
+  }
+  window.addEventListener("openai:set_globals", fromOpenAIGlobals);
 
   // --- Formatting ------------------------------------------------------------------------
   const KJ_PER_KCAL = 4.184;
@@ -353,6 +380,8 @@ body { color: var(--he-ink); font-family: var(--he-font-sans); -webkit-font-smoo
     }
     card.replaceChildren(...parts);
   }
+
+  fromOpenAIGlobals();
 })();
 </script>
 </body>
