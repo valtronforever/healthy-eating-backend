@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from fastmcp.tools import ToolResult
 from pydantic import BaseModel, Field
 
 from healthy_eating.db import Database
@@ -11,6 +12,8 @@ from healthy_eating.db.base import utcnow
 from healthy_eating.db.models import Meal
 from healthy_eating.mcp_server.context import current_client_id, current_user_id
 from healthy_eating.mcp_server.tools.usual import Per100g, per_100g
+from healthy_eating.mcp_server.ui import MEAL_CARD_URI, CardResult, card_tool_app
+from healthy_eating.mcp_server.ui.meal_card import meal_card_data
 from healthy_eating.nutrition.micronutrients import MICRONUTRIENTS, ItemMatchStatus, Micronutrient
 from healthy_eating.nutrition.types import (
     NUTRIENT_FIELDS,
@@ -235,6 +238,7 @@ class EarlierMeal(BaseModel):
 
 
 LogMealResult.model_rebuild()
+LOG_MEAL_RESULT = CardResult(LogMealResult)
 
 
 def _earlier_meal(known: KnownMeal) -> EarlierMeal:
@@ -324,6 +328,8 @@ def register(mcp: FastMCP, db: Database) -> None:
             "idempotentHint": False,
             "openWorldHint": False,
         },
+        output_schema=LOG_MEAL_RESULT.output_schema,
+        app=card_tool_app(MEAL_CARD_URI),
     )
     async def log_meal(
         dish_name: Annotated[
@@ -448,7 +454,7 @@ def register(mcp: FastMCP, db: Database) -> None:
                 ),
             ),
         ] = None,
-    ) -> LogMealResult:
+    ) -> ToolResult:
         evaluation = evaluate_meal(
             MealEstimate(
                 dish_name=dish_name,
@@ -473,7 +479,7 @@ def register(mcp: FastMCP, db: Database) -> None:
         )
 
         if not evaluation.complete:
-            return LogMealResult(
+            not_saved = LogMealResult(
                 status="needs_more_info",
                 saved_to_healthy_eating=False,
                 user_message=(
@@ -489,12 +495,16 @@ def register(mcp: FastMCP, db: Database) -> None:
                 warnings=evaluation.warnings,
                 meal=None,
             )
+            return LOG_MEAL_RESULT(not_saved, {})
 
         meal = evaluation.meal
         try:
             async with db.session() as session:
                 result = await save_meal(session, current_user_id(), meal, current_client_id())
                 saved = _saved_meal(result.meal)
+                card = await meal_card_data(
+                    session, current_user_id(), result.meal, updated=replaces_meal_id is not None
+                )
                 # Only for a new meal: a correction already settled its values.
                 earlier = (
                     await earlier_known_meal(session, current_user_id(), result.meal, now=utcnow())
@@ -524,7 +534,7 @@ def register(mcp: FastMCP, db: Database) -> None:
                 " Then ask `questions_for_user`; if the answer changes the values, call "
                 "log_meal again with replaces_meal_id."
             )
-        return LogMealResult(
+        logged = LogMealResult(
             status="logged",
             saved_to_healthy_eating=True,
             user_message=_saved_message(meal, refinable=bool(questions)),
@@ -536,3 +546,4 @@ def register(mcp: FastMCP, db: Database) -> None:
             items=_item_results(result.matches, [untracked_values(i) for i in items or []]),
             earlier_meal=_earlier_meal(earlier) if earlier is not None else None,
         )
+        return LOG_MEAL_RESULT(logged, card)

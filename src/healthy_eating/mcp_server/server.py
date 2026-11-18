@@ -2,6 +2,7 @@ from fastmcp import FastMCP
 
 from healthy_eating.auth.provider import PostgresOAuthProvider
 from healthy_eating.db import Database
+from healthy_eating.mcp_server import ui
 from healthy_eating.mcp_server.timing import RequestTimingMiddleware
 from healthy_eating.mcp_server.tools import (
     days,
@@ -77,4 +78,5 @@ def create_mcp_server(provider: PostgresOAuthProvider, db: Database) -> FastMCP:
     usual.register(mcp, db)
     importing.register(mcp, db)
     foods.register(mcp, db)
+    ui.register(mcp)
     return mcp

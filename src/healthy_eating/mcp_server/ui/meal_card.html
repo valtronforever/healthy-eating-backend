@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Healthy Eating meal</title>
+<style>
+/*__TOKENS__*/
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: transparent; }
+body { color: var(--he-ink); font-family: var(--he-font-sans); -webkit-font-smoothing: antialiased; }
+.card {
+  background: var(--he-surface); border: 1px solid var(--he-line);
+  border-radius: var(--he-radius-lg); padding: var(--he-space-4);
+  display: grid; gap: var(--he-space-3); max-width: 560px;
+}
+.status { display: flex; align-items: center; gap: var(--he-space-1); color: var(--he-accent); }
+.status.pending { color: var(--he-ink-muted); }
+.status svg { flex: none; }
+.title { margin: 0; overflow-wrap: anywhere; }
+.meta { color: var(--he-ink-muted); margin-top: 2px; }
+.provenance { display: flex; flex-wrap: wrap; align-items: center; gap: var(--he-space-2); }
+.badge {
+  display: inline-flex; align-items: center; gap: var(--he-space-1);
+  border-radius: var(--he-radius-sm); padding: 3px var(--he-space-2);
+}
+.badge.user { background: var(--he-accent-soft); color: var(--he-accent); }
+.badge.estimated { background: var(--he-surface-sunken); color: var(--he-ink-muted); }
+.confidence { display: inline-flex; align-items: center; gap: 6px; color: var(--he-ink-muted); }
+.pips { display: inline-flex; align-items: flex-end; gap: 2px; }
+.pips i { display: block; width: 4px; border-radius: var(--he-radius-full); border: 1px solid var(--he-line-strong); }
+.pips i.on { background: var(--he-ink-muted); border-color: var(--he-ink-muted); }
+.note { margin: 0; color: var(--he-ink); }
+.values { display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); gap: var(--he-space-2); }
+.values.cols-3 { --cols: 3; }
+@media (max-width: 440px) { .values.cols-4 { --cols: 2; } }
+.value {
+  background: var(--he-bg); border-radius: var(--he-radius-md);
+  padding: var(--he-space-2) var(--he-space-3); min-width: 0;
+}
+.value .label { color: var(--he-ink-muted); display: flex; align-items: center; gap: 6px; }
+.value .dot { width: 8px; height: 8px; border-radius: var(--he-radius-full); flex: none; }
+.value .number { display: flex; align-items: baseline; gap: 3px; white-space: nowrap; }
+.value .pm { color: var(--he-ink-muted); }
+.value .unit { color: var(--he-ink-muted); font-weight: 400; }
+.footnote { margin: 0; color: var(--he-ink-muted); }
+.day { border-top: 1px solid var(--he-line); padding-top: var(--he-space-3); display: grid; gap: var(--he-space-3); }
+.day-head { display: flex; justify-content: space-between; gap: var(--he-space-2); align-items: baseline; flex-wrap: wrap; }
+.band-row { display: grid; gap: 4px; }
+.band-head { display: flex; justify-content: space-between; gap: var(--he-space-2); }
+.track { position: relative; height: 10px; border-radius: var(--he-radius-xs); background: var(--he-surface-sunken); overflow: hidden; }
+.track .band { position: absolute; top: 0; bottom: 0; background: var(--he-band); }
+.track .band.lo { border-left: 2px solid var(--he-accent); }
+.track .band.hi { border-right: 2px solid var(--he-accent); }
+.track .bar { position: absolute; top: 3px; height: 4px; left: 0; border-radius: var(--he-radius-xs); }
+.plain-row { display: flex; justify-content: space-between; gap: var(--he-space-2); }
+.muted { color: var(--he-ink-muted); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main class="card" id="card" aria-live="polite">
+  <div class="status pending he-footnote" id="status">
+    <span id="status-text">Saving to Healthy Eating…</span>
+  </div>
+</main>
+<script>
+(() => {
+  "use strict";
+  const CARD_META_KEY = "healthyeating/card";
+  const PROTOCOL_VERSION = "2026-01-26";
+  const card = document.getElementById("card");
+  let locale = undefined;
+  let nextId = 1;
+  const pending = new Map();
+
+  // --- Bridge to the host (MCP Apps, JSON-RPC over postMessage) ---------------------------
+  function send(message) { window.parent.postMessage({ jsonrpc: "2.0", ...message }, "*"); }
+  function request(method, params) {
+    const id = nextId++;
+    send({ id, method, params });
+    return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+  }
+  function notify(method, params) { send({ method, params: params || {} }); }
+
+  function applyHostContext(context) {
+    if (!context) return;
+    if (context.theme === "light" || context.theme === "dark") {
+      document.documentElement.dataset.theme = context.theme;
+    }
+    if (typeof context.locale === "string") locale = context.locale;
+  }
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent) return;
+    const data = event.data;
+    if (!data || data.jsonrpc !== "2.0") return;
+    if (data.id !== undefined && !data.method) {
+      const waiter = pending.get(data.id);
+      if (!waiter) return;
+      pending.delete(data.id);
+      data.error ? waiter.reject(data.error) : waiter.resolve(data.result);
+      return;
+    }
+    switch (data.method) {
+      case "ui/notifications/tool-result": render(data.params || {}); break;
+      case "ui/notifications/tool-cancelled": renderNotSaved("The meal was not saved to Healthy Eating."); break;
+      case "ui/notifications/host-context-changed": applyHostContext(data.params); break;
+      case "ui/resource-teardown": send({ id: data.id, result: {} }); break;
+      default:
+        if (data.id !== undefined) send({ id: data.id, error: { code: -32601, message: "Method not found" } });
+    }
+  });
+
+  new ResizeObserver(() => {
+    const rect = document.documentElement.getBoundingClientRect();
+    notify("ui/notifications/size-changed", { width: Math.ceil(rect.width), height: Math.ceil(rect.height) });
+  }).observe(document.documentElement);
+
+  request("ui/initialize", {
+    protocolVersion: PROTOCOL_VERSION,
+    appInfo: { name: "Healthy Eating meal card", version: "1" },
+    appCapabilities: {},
+  }).then((result) => {
+    applyHostContext(result && result.hostContext);
+    notify("ui/notifications/initialized");
+  }).catch(() => notify("ui/notifications/initialized"));
+
+  // --- Formatting ------------------------------------------------------------------------
+  const KJ_PER_KCAL = 4.184;
+  const NUTRIENTS = [
+    { field: "calories_kcal", label: "Calories", energy: true },
+    { field: "protein_g", label: "Protein", unit: "g", color: "--he-protein" },
+    { field: "fat_g", label: "Fat", unit: "g", color: "--he-fat" },
+    { field: "carbohydrates_g", label: "Carbohydrates", short: "Carbs", unit: "g", color: "--he-carbs" },
+  ];
+  function number(value, digits) {
+    return new Intl.NumberFormat(locale, { maximumFractionDigits: digits }).format(value);
+  }
+  function amount(nutrient, value, energyUnit) {
+    if (nutrient.energy) {
+      return energyUnit === "kj"
+        ? { number: number(value * KJ_PER_KCAL, 0), unit: "kJ" }
+        : { number: number(value, 0), unit: "kcal" };
+    }
+    return { number: number(value, value < 10 ? 1 : 0), unit: nutrient.unit };
+  }
+  function amountText(nutrient, value, energyUnit) {
+    const a = amount(nutrient, value, energyUnit);
+    return `${a.number} ${a.unit}`;
+  }
+  function rangeText(nutrient, range, energyUnit) {
+    const lo = range.min, hi = range.max;
+    if (lo != null && hi != null) {
+      const a = amount(nutrient, lo, energyUnit), b = amount(nutrient, hi, energyUnit);
+      return `Target ${a.number}–${b.number} ${a.unit}`;
+    }
+    if (lo != null) return `Target at least ${amountText(nutrient, lo, energyUnit)}`;
+    return `Target up to ${amountText(nutrient, hi, energyUnit)}`;
+  }
+  // "2026-11-18T12:40:00+01:00" read as the local wall-clock time it names.
+  function wallClock(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso || "");
+    return m ? new Date(Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5])) : null;
+  }
+  function dayLabel(localDate, today) {
+    if (!localDate) return null;
+    if (localDate === today) return "Today";
+    const d = wallClock(localDate + "T00:00"), t = wallClock(today + "T00:00");
+    if (d && t && t - d === 86400000) return "Yesterday";
+    return d ? new Intl.DateTimeFormat(locale, { timeZone: "UTC", weekday: "short", month: "short", day: "numeric" }).format(d) : null;
+  }
+  function timeLabel(iso) {
+    const d = wallClock(iso);
+    return d ? new Intl.DateTimeFormat(locale, { timeZone: "UTC", hour: "numeric", minute: "2-digit" }).format(d) : null;
+  }
+
+  // --- Rendering -------------------------------------------------------------------------
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  function checkIcon() {
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("width", "16"); svg.setAttribute("height", "16"); svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", "M3.5 8.5l3 3 6-7"); path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "currentColor"); path.setAttribute("stroke-width", "2");
+    path.setAttribute("stroke-linecap", "round"); path.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(path);
+    return svg;
+  }
+  function personIcon() {
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("width", "11"); svg.setAttribute("height", "11"); svg.setAttribute("viewBox", "0 0 12 12");
+    svg.setAttribute("aria-hidden", "true");
+    const head = document.createElementNS(SVG_NS, "circle");
+    head.setAttribute("cx", "6"); head.setAttribute("cy", "3.5"); head.setAttribute("r", "2.5");
+    const body = document.createElementNS(SVG_NS, "path");
+    body.setAttribute("d", "M1.5 11.5c0-2.6 2-4.2 4.5-4.2s4.5 1.6 4.5 4.2z");
+    [head, body].forEach((shape) => { shape.setAttribute("fill", "currentColor"); svg.appendChild(shape); });
+    return svg;
+  }
+  function status(text, saved) {
+    const row = el("div", "status he-footnote" + (saved ? "" : " pending"));
+    if (saved) row.appendChild(checkIcon());
+    row.appendChild(el("span", null, text));
+    return row;
+  }
+  function badge(estimated) {
+    const b = el("span", "badge he-caption-1 " + (estimated ? "estimated" : "user"));
+    if (estimated) {
+      b.appendChild(el("span", null, "±"));
+      b.lastChild.setAttribute("aria-hidden", "true");
+    } else {
+      b.appendChild(personIcon());
+    }
+    b.appendChild(el("span", null, estimated ? "Estimated" : "Your numbers"));
+    return b;
+  }
+  function confidence(level) {
+    const names = { low: "Low", medium: "Medium", high: "High" };
+    const wrap = el("span", "confidence he-caption-1");
+    wrap.setAttribute("aria-label", `${names[level]} confidence`);
+    const pips = el("span", "pips");
+    pips.setAttribute("aria-hidden", "true");
+    const on = { low: 1, medium: 2, high: 3 }[level];
+    [6, 9, 12].forEach((h, i) => { const p = el("i", i < on ? "on" : ""); p.style.height = h + "px"; pips.appendChild(p); });
+    wrap.appendChild(pips);
+    wrap.appendChild(el("span", null, `${names[level]} confidence`));
+    return wrap;
+  }
+  function valueTile(nutrient, value, estimated, energyUnit) {
+    const tile = el("div", "value");
+    const label = el("div", "label he-footnote");
+    if (nutrient.color) { const dot = el("span", "dot"); dot.style.background = `var(${nutrient.color})`; label.appendChild(dot); }
+    label.appendChild(el("span", null, nutrient.short || nutrient.label));
+    tile.appendChild(label);
+    const a = amount(nutrient, value, energyUnit);
+    const n = el("div", "number");
+    if (estimated) { const pm = el("span", "pm he-subheadline", "±"); pm.setAttribute("aria-label", "estimated"); n.appendChild(pm); }
+    n.appendChild(el("span", "he-metric-sm", a.number));
+    n.appendChild(el("span", "unit he-subheadline", a.unit));
+    tile.appendChild(n);
+    return tile;
+  }
+  function bandRow(nutrient, value, range, energyUnit) {
+    const row = el("div", "band-row");
+    const head = el("div", "band-head");
+    head.appendChild(el("span", "he-subheadline", nutrient.label));
+    head.appendChild(el("span", "he-metric-sm", amountText(nutrient, value, energyUnit)));
+    row.appendChild(head);
+    if (range && (range.min != null || range.max != null)) {
+      const top = Math.max(range.max != null ? range.max : range.min, value) * 1.3 || 1;
+      const track = el("div", "track");
+      track.setAttribute("aria-hidden", "true");
+      const band = el("div", "band" + (range.min != null ? " lo" : "") + (range.max != null ? " hi" : ""));
+      const lo = range.min != null ? range.min : 0, hi = range.max != null ? range.max : top;
+      band.style.left = (lo / top * 100) + "%";
+      band.style.width = ((hi - lo) / top * 100) + "%";
+      const bar = el("div", "bar");
+      bar.style.width = Math.min(value / top * 100, 100) + "%";
+      bar.style.background = nutrient.color ? `var(${nutrient.color})` : "var(--he-ink)";
+      track.append(band, bar);
+      row.appendChild(track);
+      row.appendChild(el("span", "muted he-footnote", rangeText(nutrient, range, energyUnit)));
+    }
+    return row;
+  }
+
+  function renderNotSaved(text) {
+    card.replaceChildren(status("Not saved to Healthy Eating", false), el("p", "note he-callout", text));
+  }
+
+  function render(result) {
+    const data = result.structuredContent;
+    const extra = (result._meta && result._meta[CARD_META_KEY]) || {};
+    if (result.isError || !data) {
+      const text = (result.content || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
+      renderNotSaved(text || "The meal was not saved to Healthy Eating.");
+      return;
+    }
+    if (!data.saved_to_healthy_eating || !data.meal) {
+      card.replaceChildren(
+        status("Not saved to Healthy Eating yet", false),
+        el("p", "note he-callout", "Your assistant needs a few details first. It saves the meal after your answer."),
+      );
+      return;
+    }
+    const meal = data.meal;
+    const calm = !!extra.calm_mode;
+    const energyUnit = extra.energy_unit || "kcal";
+    const estimated = new Set(meal.estimated_fields || []);
+    const anyEstimated = estimated.size > 0;
+    const shown = NUTRIENTS.filter((n) => !(calm && n.energy));
+
+    const parts = [status(extra.updated ? "Updated in Healthy Eating" : "Saved to Healthy Eating", true)];
+
+    const heading = el("div");
+    heading.appendChild(el("h1", "title he-headline", meal.dish_name));
+    const metaBits = [];
+    const day = dayLabel(extra.local_date, extra.today);
+    const time = timeLabel(extra.eaten_at_local);
+    if (day && time) metaBits.push(`${day}, ${time}`);
+    if (meal.portion_grams != null) metaBits.push(`${number(meal.portion_grams, 0)} g`);
+    if (metaBits.length) heading.appendChild(el("div", "meta he-footnote", metaBits.join(" · ")));
+    parts.push(heading);
+
+    const provenance = el("div", "provenance");
+    provenance.appendChild(badge(anyEstimated));
+    if (anyEstimated && meal.confidence) provenance.appendChild(confidence(meal.confidence));
+    parts.push(provenance);
+    if (meal.source_note) parts.push(el("p", "note he-callout", meal.source_note));
+
+    const values = el("div", `values cols-${shown.length}`);
+    shown.forEach((n) => values.appendChild(valueTile(n, meal[n.field], estimated.has(n.field), energyUnit)));
+    parts.push(values);
+    if (anyEstimated) parts.push(el("p", "footnote he-footnote", "± marks values your assistant estimated."));
+
+    const totals = extra.day_totals;
+    if (totals && totals.meal_count > 0) {
+      const section = el("section", "day");
+      const head = el("div", "day-head");
+      head.appendChild(el("h2", "title he-subheadline", (day === "Today" ? "Today so far" : day || "That day")));
+      head.lastChild.style.fontWeight = "600";
+      head.appendChild(el("span", "muted he-footnote", totals.meal_count === 1 ? "1 meal" : `${totals.meal_count} meals`));
+      section.appendChild(head);
+      const targets = extra.targets || {};
+      shown.forEach((n) => section.appendChild(bandRow(n, totals[n.field], targets[n.field], energyUnit)));
+      parts.push(section);
+    }
+    card.replaceChildren(...parts);
+  }
+})();
+</script>
+</body>
+</html>
