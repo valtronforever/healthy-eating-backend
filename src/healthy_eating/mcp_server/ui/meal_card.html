@@ -47,7 +47,7 @@ body { color: var(--he-ink); font-family: var(--he-font-sans); -webkit-font-smoo
 .day { border-top: 1px solid var(--he-line); padding-top: var(--he-space-3); display: grid; gap: var(--he-space-3); }
 .day-head { display: flex; justify-content: space-between; gap: var(--he-space-2); align-items: baseline; flex-wrap: wrap; }
 .band-row { display: grid; gap: 4px; }
-.band-head { display: flex; justify-content: space-between; gap: var(--he-space-2); }
+.band-head, .band-foot { display: flex; justify-content: space-between; gap: var(--he-space-2); flex-wrap: wrap; }
 .track { position: relative; height: 10px; border-radius: var(--he-radius-xs); background: var(--he-surface-sunken); overflow: hidden; }
 .track .band { position: absolute; top: 0; bottom: 0; background: var(--he-band); }
 .track .band.lo { border-left: 2px solid var(--he-accent); }
@@ -158,6 +158,19 @@ body { color: var(--he-ink); font-family: var(--he-font-sans); -webkit-font-smoo
     if (lo != null) return `Target at least ${amountText(nutrient, lo, energyUnit)}`;
     return `Target up to ${amountText(nutrient, hi, energyUnit)}`;
   }
+  // How much of the daily target the day has so far, like the app: "58%–63% of daily target"
+  // (share of the top and of the start of the range); nothing once the bar is full.
+  function shareText(value, range) {
+    const top = range.max != null ? range.max : range.min;
+    if (!(top > 0) || value >= top) return null;
+    const percent = (ratio) => new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 0 }).format(Math.min(ratio, 1));
+    let share = percent(value / top);
+    if (range.min != null && range.max != null && range.min > 0) {
+      const fromStart = percent(value / range.min);
+      if (fromStart !== share) share += `–${fromStart}`;
+    }
+    return `${share} of daily target`;
+  }
   // "2026-11-18T12:40:00+01:00" read as the local wall-clock time it names.
   function wallClock(iso) {
     const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso || "");
@@ -255,19 +268,24 @@ body { color: var(--he-ink); font-family: var(--he-font-sans); -webkit-font-smoo
     head.appendChild(el("span", "he-metric-sm", amountText(nutrient, value, energyUnit)));
     row.appendChild(head);
     if (range && (range.min != null || range.max != null)) {
-      const top = Math.max(range.max != null ? range.max : range.min, value) * 1.3 || 1;
+      // The track ends at the top of the target: the bar fills toward it and is simply full past it.
+      const top = (range.max != null ? range.max : range.min) || 1;
       const track = el("div", "track");
       track.setAttribute("aria-hidden", "true");
       const band = el("div", "band" + (range.min != null ? " lo" : "") + (range.max != null ? " hi" : ""));
       const lo = range.min != null ? range.min : 0, hi = range.max != null ? range.max : top;
-      band.style.left = (lo / top * 100) + "%";
-      band.style.width = ((hi - lo) / top * 100) + "%";
+      band.style.left = `min(${lo / top * 100}%, calc(100% - 2px))`;
+      band.style.width = `max(${(hi - lo) / top * 100}%, 2px)`;
       const bar = el("div", "bar");
       bar.style.width = Math.min(value / top * 100, 100) + "%";
       bar.style.background = nutrient.color ? `var(${nutrient.color})` : "var(--he-ink)";
       track.append(band, bar);
       row.appendChild(track);
-      row.appendChild(el("span", "muted he-footnote", rangeText(nutrient, range, energyUnit)));
+      const foot = el("div", "band-foot muted he-footnote");
+      foot.appendChild(el("span", null, rangeText(nutrient, range, energyUnit)));
+      const share = shareText(value, range);
+      if (share) foot.appendChild(el("span", null, share));
+      row.appendChild(foot);
     }
     return row;
   }
