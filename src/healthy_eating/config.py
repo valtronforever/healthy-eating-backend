@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # Only allowed in development.
     dev_login_enabled: bool = False
 
+    # Cards next to tool calls in clients with MCP Apps (the log_meal meal card). Off while
+    # the ChatGPT mobile apps leave a card on their loading placeholder.
+    chat_cards_enabled: bool = False
+
     google_client_id: str | None = None
     google_client_secret: SecretStr | None = None
 

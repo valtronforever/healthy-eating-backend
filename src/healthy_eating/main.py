@@ -32,7 +32,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     db = Database(settings.database_url)
     oauth_provider = PostgresOAuthProvider(settings=settings, db=db)
-    mcp_app = create_mcp_server(oauth_provider, db).http_app(path="/mcp")
+    mcp_app = create_mcp_server(
+        oauth_provider, db, chat_cards=settings.chat_cards_enabled
+    ).http_app(path="/mcp")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:

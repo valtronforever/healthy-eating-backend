@@ -1,14 +1,19 @@
 import json
 import re
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from fastmcp import Client, FastMCP
 from fastmcp.client.transports import StreamableHttpTransport
+from fastmcp.utilities.asgi_transport import run_asgi_lifespan
 from fastmcp.utilities.mime import UI_MIME_TYPE
 
+from healthy_eating.config import Settings
+from healthy_eating.main import create_app
 from healthy_eating.mcp_server.tools.meals import LogMealResult
 from healthy_eating.mcp_server.ui import CARD_META_KEY, MEAL_CARD_URI, card_html
 from healthy_eating.mcp_server.ui.build_tokens import OUTPUT, build_css
@@ -17,6 +22,14 @@ from tests.oauth_helpers import bearer, register_client, sign_in
 from tests.test_meals import COMPLETE_MEAL
 
 IOS_TOKENS = Path(__file__).parents[2] / "healthy-eating-ios" / "design" / "system" / "tokens.json"
+
+
+@pytest.fixture(scope="module")
+async def app(settings: Settings) -> AsyncIterator[FastAPI]:
+    """The app with chat cards turned on (they are off by default)."""
+    app = create_app(settings.model_copy(update={"chat_cards_enabled": True}))
+    async with run_asgi_lifespan(app):
+        yield app
 
 
 @pytest.fixture

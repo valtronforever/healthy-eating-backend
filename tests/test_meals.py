@@ -203,6 +203,21 @@ async def test_log_meal_saves_assistant_estimate(
     assert abs((utcnow() - meal.eaten_at).total_seconds()) < 60
 
 
+async def test_log_meal_shows_no_chat_card_by_default(
+    mcp: Client[StreamableHttpTransport],
+) -> None:
+    # CHAT_CARDS_ENABLED is off: no card link, no card resource, no card data in the result.
+    async with mcp:
+        tools = {tool.name: tool for tool in await mcp.list_tools()}
+        resources = await mcp.list_resources()
+        result = await mcp.call_tool("log_meal", COMPLETE_MEAL)
+    assert "ui" not in (tools["log_meal"].meta or {})
+    assert not [r for r in resources if str(r.uri).startswith("ui://")]
+    assert result.structured_content is not None
+    assert result.structured_content["saved_to_healthy_eating"] is True
+    assert "healthyeating/card" not in (result.meta or {})
+
+
 async def test_log_meal_does_not_log_meal_contents(
     mcp: Client[StreamableHttpTransport], caplog: pytest.LogCaptureFixture
 ) -> None:

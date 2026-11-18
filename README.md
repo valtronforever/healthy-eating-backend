@@ -103,6 +103,7 @@ All settings are environment variables (or entries in `.env`). See [`.env.exampl
 | `DATABASE_URL` | local Postgres | `postgresql+asyncpg://user:pass@host:5432/db` |
 | `SECRET_KEY` | dev-only value | Required in production (at least 32 characters) |
 | `DEV_LOGIN_ENABLED` | `false` | Email-only login for development. Rejected in production |
+| `CHAT_CARDS_ENABLED` | `false` | Shows a meal card next to `log_meal` in clients with MCP Apps. Off because the ChatGPT mobile apps leave it on a loading placeholder |
 | `GOOGLE_*`, `MICROSOFT_*`, `APPLE_*` | unset | A provider appears on the login page only when all its variables are set |
 
 ## Social login setup

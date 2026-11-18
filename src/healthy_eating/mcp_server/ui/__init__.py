@@ -57,9 +57,11 @@ class CardResult:
     def output_schema(self) -> dict[str, Any] | None:
         return self._shape.output_schema
 
-    def __call__(self, result: BaseModel, card: dict[str, Any]) -> ToolResult:
+    def __call__(self, result: BaseModel, card: dict[str, Any] | None) -> ToolResult:
+        """The tool result, with `card` in `_meta` unless it is None (cards turned off)."""
         tool_result = self._shape.convert_result(result)
-        tool_result.meta = {CARD_META_KEY: card}
+        if card is not None:
+            tool_result.meta = {CARD_META_KEY: card}
         return tool_result
 
 

@@ -318,7 +318,7 @@ def _saved_meal(row: Meal) -> SavedMeal:
     )
 
 
-def register(mcp: FastMCP, db: Database) -> None:
+def register(mcp: FastMCP, db: Database, *, chat_cards: bool = False) -> None:
     @mcp.tool(
         description=LOG_MEAL_DESCRIPTION,
         annotations={
@@ -329,7 +329,7 @@ def register(mcp: FastMCP, db: Database) -> None:
             "openWorldHint": False,
         },
         output_schema=LOG_MEAL_RESULT.output_schema,
-        app=card_tool_app(MEAL_CARD_URI),
+        app=card_tool_app(MEAL_CARD_URI) if chat_cards else None,
     )
     async def log_meal(
         dish_name: Annotated[
@@ -495,15 +495,22 @@ def register(mcp: FastMCP, db: Database) -> None:
                 warnings=evaluation.warnings,
                 meal=None,
             )
-            return LOG_MEAL_RESULT(not_saved, {})
+            return LOG_MEAL_RESULT(not_saved, {} if chat_cards else None)
 
         meal = evaluation.meal
         try:
             async with db.session() as session:
                 result = await save_meal(session, current_user_id(), meal, current_client_id())
                 saved = _saved_meal(result.meal)
-                card = await meal_card_data(
-                    session, current_user_id(), result.meal, updated=replaces_meal_id is not None
+                card = (
+                    await meal_card_data(
+                        session,
+                        current_user_id(),
+                        result.meal,
+                        updated=replaces_meal_id is not None,
+                    )
+                    if chat_cards
+                    else None
                 )
                 # Only for a new meal: a correction already settled its values.
                 earlier = (

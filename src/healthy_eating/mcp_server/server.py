@@ -65,11 +65,13 @@ in with the same account they used to connect here.
 """
 
 
-def create_mcp_server(provider: PostgresOAuthProvider, db: Database) -> FastMCP:
+def create_mcp_server(
+    provider: PostgresOAuthProvider, db: Database, *, chat_cards: bool = False
+) -> FastMCP:
     mcp = FastMCP(name="Healthy Eating", instructions=INSTRUCTIONS, auth=provider)
     mcp.add_middleware(RequestTimingMiddleware(db))
     profile.register(mcp, db)
-    meals.register(mcp, db)
+    meals.register(mcp, db, chat_cards=chat_cards)
     days.register(mcp, db)
     history.register(mcp, db)
     insights.register(mcp, db)
@@ -78,5 +80,6 @@ def create_mcp_server(provider: PostgresOAuthProvider, db: Database) -> FastMCP:
     usual.register(mcp, db)
     importing.register(mcp, db)
     foods.register(mcp, db)
-    ui.register(mcp)
+    if chat_cards:
+        ui.register(mcp)
     return mcp
